@@ -2694,8 +2694,29 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /** The background follows the focused card (the wide one). */
     private void followCard() {
+        preloadCards();
         Backdrop b = cardIndex < cards.size() ? recs.backdrop(cards.get(cardIndex)) : null;
         if (b != null) showBackdrop(b);
+    }
+
+    /**
+     * The images around the focused card: the four on screen (the row starts at cardIndex - 2) and one past each edge,
+     * so the next press finds its card ready; with room left in what Recs keeps, the first card of each other tab too
+     * (switching tabs never flashes the gradient). The rest load as the row moves.
+     */
+    private void preloadCards() {
+        if (cards.isEmpty()) return;
+        int start = Math.max(0, cardIndex - 2), first = Math.max(0, start - 1), last = Math.min(cards.size() - 1, start + 4);
+        int room = recs.keep - (last - first + 1);
+        for (int t = 0; t < tabKinds.length && room > 0; t++) {
+            if (t == tab || "yt".equals(tabKinds[t])) continue;
+            List<Recs.Pick> other = recs.now(tabKinds[t]);
+            if (!other.isEmpty()) {
+                recs.backdrop(other.get(0));
+                room--;
+            }
+        }
+        for (int i = first; i <= last; i++) recs.backdrop(cards.get(i));
     }
 
     /**
@@ -2740,18 +2761,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 retarget(false);
             }
         }
-        // This tab's cards and the first of each other tab (its background: switching tabs never flashes the gradient);
-        // the others' remaining cards load when shown. Within what Recs keeps in memory, so nothing is built twice.
-        int others = 0;
-        for (int t = 0; t < tabKinds.length; t++) {
-            if (t == tab || "yt".equals(tabKinds[t])) continue;
-            List<Recs.Pick> other = recs.now(tabKinds[t]);
-            if (!other.isEmpty()) {
-                recs.backdrop(other.get(0));
-                others++;
-            }
-        }
-        for (int i = 0; i < Math.min(cards.size(), recs.keep - others); i++) recs.backdrop(cards.get(i));
+        preloadCards();
         Backdrop b = cards.isEmpty() ? null : recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
         if (cards.isEmpty() || b != null) showBackdrop(b);
         heroDirty = true;

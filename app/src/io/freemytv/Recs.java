@@ -131,7 +131,8 @@ final class Recs {
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
     private final Map<String, Bitmap> posters = new LinkedHashMap<>();   // narrow-card portraits, same keys as images
-    private final Map<String, Backdrop> images = new LinkedHashMap<>();   // this hour's, built and ready to draw
+    // This hour's, built and ready to draw; the least recently drawn goes first (a card on screen is never the one dropped).
+    private final Map<String, Backdrop> images = new LinkedHashMap<>(16, 0.75f, true);
     private final java.util.Set<String> pending = new java.util.HashSet<>();
     private volatile List<Pick> picks = new ArrayList<>();
     private volatile int period = -1;
@@ -145,9 +146,10 @@ final class Recs {
     private Recs(Context c) {
         context = c;
         cache = c.getSharedPreferences("recs", Context.MODE_PRIVATE);
-        // Backgrounds kept ready (~4 MB each: the cards in graphics memory, the glass in the heap): the tab's 10 cards
-        // and the first of each other tab; on a TV Android calls low on memory, fewer (the rest load when shown).
-        keep = ((android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE)).isLowRamDevice() ? 8 : 13;
+        // Backgrounds kept ready (~4 MB each with the poster: the cards in graphics memory, the glass in the heap): the
+        // cards on screen and one past each edge (HomeView.preloadCards), and with room, each other tab's first. With
+        // little memory, only the row around the focus: the next card loads as the row moves.
+        keep = smallMemory(c) ? 6 : 13;
         if (cache.getInt("version", 0) != CACHE_VERSION) cache.edit().clear().putInt("version", CACHE_VERSION).apply();
         try {
             String saved = cache.getString("picks", null);
@@ -158,6 +160,14 @@ final class Recs {
             keyStamp = cache.getLong("keyStamp", 0);
         } catch (Exception ignored) {
         }
+    }
+
+    /** Under 3 GB: most TVs have 1.5 to 2.5, and Android flags few of them as low on memory. */
+    private static boolean smallMemory(Context c) {
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mem = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mem);
+        return am.isLowRamDevice() || mem.totalMem < 3L << 30;
     }
 
     void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); }
