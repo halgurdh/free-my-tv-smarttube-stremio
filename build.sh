@@ -41,6 +41,7 @@ LON="$(number longitude -74.0060)"
 ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
 CRYPTO=false; [ "$(prop show_crypto true)" = "true" ] && CRYPTO=true
 ANIMATION=false; [ "$(prop hide_animation false)" = "true" ] && ANIMATION=true
+STREMIO=false; [ "$(prop open_in_stremio false)" = "true" ] && STREMIO=true
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -52,6 +53,8 @@ final class Config {
 
     static final String TMDB_KEY = "$(prop tmdb_key '')";
     static final String WATCHMODE_KEY = "$(prop watchmode_key '')";
+    static final String TRAKT_CLIENT_ID = "$(prop trakt_client_id '')";
+    static final String TRAKT_CLIENT_SECRET = "$(prop trakt_client_secret '')";
     static final String TMDB_REGION = "$(prop tmdb_region US)";
     static final String LATITUDE = "$LAT";
     static final String LONGITUDE = "$LON";
@@ -63,6 +66,8 @@ final class Config {
     static final boolean DISABLE_ASSISTANT = $ASSIST;
     static final boolean SHOW_CRYPTO = $CRYPTO;
     static final boolean HIDE_ANIMATION = $ANIMATION;
+    static final boolean OPEN_IN_STREMIO = $STREMIO;
+    static final String YOUTUBE_CHANNELS = "$(prop youtube_channels '')";
 }
 EOF
 
