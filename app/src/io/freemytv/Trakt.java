@@ -17,8 +17,10 @@ import java.security.MessageDigest;
 import java.security.SecureRandom;
 import java.util.ArrayList;
 import java.util.Collections;
+import java.util.HashMap;
 import java.util.HashSet;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 /**
@@ -59,6 +61,8 @@ final class Trakt {
     /** What the picks need, as Recs keys ("movie:603", "tv:1396"). */
     static final class Lists {
         final Set<String> watched = new HashSet<>();
+        /** Trakt's last change to the account (marked watched, added to the watchlist…) when these were read. */
+        String activity = "";
         final List<Progress> progress = new ArrayList<>();
         final List<String> watchlistMovies = new ArrayList<>(), watchlistShows = new ArrayList<>();
         final List<String> recommendedMovies = new ArrayList<>(), recommendedShows = new ArrayList<>();
@@ -211,11 +215,17 @@ final class Trakt {
     /** Progress, watched titles, the watchlist (newest first) and recommendations, from TMDB ids. Off the UI thread. */
     static Lists lists(Context c) throws Exception {
         Lists out = new Lists();
-        watched(c, "/sync/watched/movies", "movie", out.watched);
-        JSONArray shows = watched(c, "/sync/watched/shows?extended=noseasons", "show", out.watched);
+        try {
+            out.activity = activity(c);
+        } catch (Exception e) {
+            AppLog.w("trakt activity: " + e.getMessage());
+        }
+        Map<String, String> watchedAt = new HashMap<>();
+        watched(c, "/sync/watched/movies", "movie", out.watched, watchedAt);
+        JSONArray shows = watched(c, "/sync/watched/shows?extended=noseasons", "show", out.watched, watchedAt);
         // Each part on its own: one Trakt endpoint failing leaves the others.
         try {
-            playback(c, out);
+            playback(c, out, watchedAt);
         } catch (Exception e) {
             AppLog.w("trakt playback: " + e.getMessage());
         }
@@ -235,17 +245,33 @@ final class Trakt {
         return out;
     }
 
-    private static JSONArray watched(Context c, String path, String type, Set<String> out) throws Exception {
+    /**
+     * Also when each was last watched or marked watched (`at`): marking a show watched "on its release date" leaves
+     * last_watched_at in the past, but last_updated_at is when it was marked.
+     */
+    private static JSONArray watched(Context c, String path, String type, Set<String> out, Map<String, String> at) throws Exception {
         JSONArray a = new JSONArray(get(c, path));
         for (int i = 0; i < a.length(); i++) {
-            String key = key(a.optJSONObject(i), type);
-            if (key != null) out.add(key);
+            JSONObject item = a.optJSONObject(i);
+            String key = key(item, type);
+            if (key == null) continue;
+            out.add(key);
+            String watchedAt = item.optString("last_watched_at"), updatedAt = item.optString("last_updated_at");
+            at.put(key, watchedAt.compareTo(updatedAt) > 0 ? watchedAt : updatedAt);
         }
         return a;
     }
 
-    /** Movies and episodes stopped partway, the most recent first. */
-    private static void playback(Context c, Lists out) throws Exception {
+    /** When the account last changed on Trakt (ISO 8601, one small request): the picks are fetched again if it moves. */
+    static String activity(Context c) throws Exception {
+        return new JSONObject(get(c, "/sync/last_activities")).optString("all");
+    }
+
+    /**
+     * Movies and episodes stopped partway, the most recent first. Trakt keeps one there after it's marked watched:
+     * one watched since it was paused is left out (a show's next episode then comes from upNext).
+     */
+    private static void playback(Context c, Lists out, Map<String, String> watchedAt) throws Exception {
         JSONArray a = new JSONArray(get(c, "/sync/playback?limit=20"));
         List<JSONObject> items = new ArrayList<>();
         for (int i = 0; i < a.length(); i++) if (a.optJSONObject(i) != null) items.add(a.optJSONObject(i));
@@ -255,6 +281,8 @@ final class Trakt {
             String key = key(item, movie ? "movie" : "show");
             JSONObject ep = movie ? null : item.optJSONObject("episode");
             if (key == null || has(out.progress, key)) continue;
+            String watched = watchedAt.get(key);
+            if (watched != null && watched.compareTo(item.optString("paused_at")) >= 0) continue;
             out.progress.add(new Progress(key, ep == null ? 0 : ep.optInt("season"), ep == null ? 0 : ep.optInt("number"), true));
         }
     }

@@ -84,6 +84,8 @@ final class HomeApps {
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
         {"smarttube", "SmartTube", "org.smarttube.stable", "E62117", "", "1"},
         {"smarttube", "SmartTube", "org.smarttube.beta", "E62117", "", "1"},
+        {"smarttube", "SmartTube", "com.teamsmart.videomanager.tv", "E62117", "", "1"},     // its older package names
+        {"smarttube", "SmartTube", "com.liskovsoft.smarttubetv.beta", "E62117", "", "1"},
         {"prime", "Prime Video", "com.amazon.amazonvideo.livingroom", "1A98FF", "tint", "0.96"},
         {"disney", "Disney+", "com.disney.disneyplus", "1838C8", "", "1"},
         {"max", "Max", "com.wbd.stream", "6C3BE0", "", "1.32"},

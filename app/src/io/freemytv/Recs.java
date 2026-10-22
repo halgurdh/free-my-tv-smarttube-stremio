@@ -68,6 +68,8 @@ final class Recs {
     /** TMDB's Animation genre (movies and shows: cartoons and anime), left out with hide_animation=true. */
     private static final int ANIMATION = 16;
     private static final long LIST_EVERY = 6 * 3600_000L;
+    /** How often Trakt is asked whether the account changed (marked watched, the watchlist): one small request. */
+    private static final long TRAKT_EVERY = 10 * 60_000L;
     /** Bump when what is saved for each title changes (the saved list is discarded and fetched again). */
     private static final int CACHE_VERSION = 5;
     /** TMDB's picks kept besides the Trakt ones: enough that each tab still fills its cards after the franchise filter. */
@@ -142,6 +144,8 @@ final class Recs {
     private volatile boolean light;     // light design: builds only the cards (all three tabs' cards fit in memory)
     private volatile long failedAt, keyStamp, linkRetryAt;
     private volatile String listLanguage = "";   // language used for the saved titles, genres and texts
+    private volatile String traktActivity = "";  // Trakt's last change when the picks were fetched
+    private volatile long traktCheckedAt;
 
     private Recs(Context c) {
         context = c;
@@ -158,6 +162,7 @@ final class Recs {
             listAt = cache.getLong("listAt", 0);
             listLanguage = cache.getString("language", cache.getBoolean("english", false) ? "en" : "pt");
             keyStamp = cache.getLong("keyStamp", 0);
+            traktActivity = cache.getString("traktActivity", "");
         } catch (Exception ignored) {
         }
     }
@@ -304,12 +309,26 @@ final class Recs {
                 || !listLanguage.equals(Ui.language);
         boolean missing = false;
         for (Pick pick : wanted()) missing |= !pick.detailed || !hasImage(pick) || needsLink(pick);
-        if (!stale && !missing) return;
+        boolean checkTrakt = !stale && Trakt.signedIn(context) && (now - traktCheckedAt > TRAKT_EVERY || now < traktCheckedAt);
+        if (!stale && !missing && !checkTrakt) return;
         keyStamp = stamp;
         fetching = true;
+        if (checkTrakt) traktCheckedAt = now;
         io.execute(() -> {
             try {
-                if (stale) fetchList(p);
+                boolean list = stale;
+                if (checkTrakt) {
+                    try {
+                        String activity = Trakt.activity(context);
+                        if (!activity.isEmpty() && !activity.equals(traktActivity)) {
+                            AppLog.w("trakt: the account changed, fetching the picks again");
+                            list = true;
+                        }
+                    } catch (Exception e) {
+                        AppLog.w("trakt activity: " + e.getMessage());
+                    }
+                }
+                if (list) fetchList(p);
                 // One failing title doesn't stop the others; whatever has no app on the TV is not downloaded.
                 int failures = 0, tried = 0;
                 String last = "";
@@ -453,6 +472,10 @@ final class Recs {
             }
         }
         final Set<String> watched = trakt == null ? new HashSet<>() : trakt.watched;
+        if (trakt != null) {
+            traktActivity = trakt.activity;
+            traktCheckedAt = System.currentTimeMillis();
+        }
         StringBuilder ids = new StringBuilder();
         for (int id : services.keySet()) ids.append(ids.length() == 0 ? "" : "|").append(id);
         String common = "&language=" + lang() + "&watch_region=" + REGION + "&with_watch_monetization_types=flatrate&include_adult=false"
@@ -967,6 +990,7 @@ final class Recs {
                         .put("tag", p.tag == null ? "" : p.tag).put("mine", p.mine).put("detailed", p.detailed));
             }
             SharedPreferences.Editor e = cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
+                    .putString("traktActivity", traktActivity)
                     .putString("language", listLanguage)
                     .putLong("keyStamp", keyStamp).putInt("version", CACHE_VERSION);
             // Watchmode links of titles no longer in the list go (the refused-key mark stays).
