@@ -22,8 +22,9 @@ import java.util.List;
 import java.util.Set;
 
 /**
- * Trakt (trakt.tv), only for someone who signs in with their own account: the picks leave out what they've watched and
- * bring in their watchlist. It only reads. Needs the person's own API app (config.properties "trakt_client_id"); without
+ * Trakt (trakt.tv), only for someone who signs in with their own account: the picks start with what they're in the
+ * middle of (continue watching, the next episode), bring in their watchlist and Trakt's recommendations, and leave out
+ * what they've watched. It only reads. Needs the person's own API app (config.properties "trakt_client_id"); without
  * it, or until they sign in, nothing here runs and the picks stay TMDB's.
  *
  * Signing in is Trakt's device code with PKCE: the TV shows a short code, they type it at trakt.tv/activate on their
@@ -36,11 +37,31 @@ final class Trakt {
     private static final String API = "https://api.trakt.tv";
     /** Watchlist titles taken into the picks, per kind (each costs TMDB requests for its details). */
     static final int WATCHLIST_MAX = 12;
+    /** Trakt's recommendations taken, per kind. */
+    static final int RECOMMENDED_MAX = 10;
+    /** Shows watched most recently whose next episode is looked up (one Trakt request each). */
+    private static final int UP_NEXT_SHOWS = 8;
 
-    /** What the picks need: watched titles and the watchlist, as Recs keys ("movie:603", "tv:1396"). */
+    /** Something they're in the middle of: a paused movie or episode, or a show's next episode. */
+    static final class Progress {
+        final String key;
+        final int season, episode;     // 0 for a movie
+        final boolean paused;          // stopped partway (Trakt's playback), not the next one up
+
+        Progress(String key, int season, int episode, boolean paused) {
+            this.key = key;
+            this.season = season;
+            this.episode = episode;
+            this.paused = paused;
+        }
+    }
+
+    /** What the picks need, as Recs keys ("movie:603", "tv:1396"). */
     static final class Lists {
         final Set<String> watched = new HashSet<>();
+        final List<Progress> progress = new ArrayList<>();
         final List<String> watchlistMovies = new ArrayList<>(), watchlistShows = new ArrayList<>();
+        final List<String> recommendedMovies = new ArrayList<>(), recommendedShows = new ArrayList<>();
     }
 
     // Sign-in in progress (Settings shows it in the Trakt row); null when none.
@@ -187,21 +208,88 @@ final class Trakt {
 
     // MARK: - Lists
 
-    /** Watched titles and the watchlist (newest first), from TMDB ids. Off the UI thread. */
+    /** Progress, watched titles, the watchlist (newest first) and recommendations, from TMDB ids. Off the UI thread. */
     static Lists lists(Context c) throws Exception {
         Lists out = new Lists();
         watched(c, "/sync/watched/movies", "movie", out.watched);
-        watched(c, "/sync/watched/shows?extended=noseasons", "show", out.watched);
+        JSONArray shows = watched(c, "/sync/watched/shows?extended=noseasons", "show", out.watched);
+        // Each part on its own: one Trakt endpoint failing leaves the others.
+        try {
+            playback(c, out);
+        } catch (Exception e) {
+            AppLog.w("trakt playback: " + e.getMessage());
+        }
+        try {
+            upNext(c, shows, out);
+        } catch (Exception e) {
+            AppLog.w("trakt up next: " + e.getMessage());
+        }
         watchlist(c, "/sync/watchlist/movies", "movie", out.watchlistMovies);
         watchlist(c, "/sync/watchlist/shows", "show", out.watchlistShows);
+        try {
+            recommended(c, "/recommendations/movies?ignore_collected=true&limit=" + RECOMMENDED_MAX * 2, "movie", out.recommendedMovies);
+            recommended(c, "/recommendations/shows?ignore_collected=true&limit=" + RECOMMENDED_MAX * 2, "show", out.recommendedShows);
+        } catch (Exception e) {
+            AppLog.w("trakt recommendations: " + e.getMessage());
+        }
         return out;
     }
 
-    private static void watched(Context c, String path, String type, Set<String> out) throws Exception {
+    private static JSONArray watched(Context c, String path, String type, Set<String> out) throws Exception {
         JSONArray a = new JSONArray(get(c, path));
         for (int i = 0; i < a.length(); i++) {
             String key = key(a.optJSONObject(i), type);
             if (key != null) out.add(key);
+        }
+        return a;
+    }
+
+    /** Movies and episodes stopped partway, the most recent first. */
+    private static void playback(Context c, Lists out) throws Exception {
+        JSONArray a = new JSONArray(get(c, "/sync/playback?limit=20"));
+        List<JSONObject> items = new ArrayList<>();
+        for (int i = 0; i < a.length(); i++) if (a.optJSONObject(i) != null) items.add(a.optJSONObject(i));
+        Collections.sort(items, (x, y) -> y.optString("paused_at").compareTo(x.optString("paused_at")));
+        for (JSONObject item : items) {
+            boolean movie = "movie".equals(item.optString("type"));
+            String key = key(item, movie ? "movie" : "show");
+            JSONObject ep = movie ? null : item.optJSONObject("episode");
+            if (key == null || has(out.progress, key)) continue;
+            out.progress.add(new Progress(key, ep == null ? 0 : ep.optInt("season"), ep == null ? 0 : ep.optInt("number"), true));
+        }
+    }
+
+    /** The next episode of the shows watched most recently, when one is out. */
+    private static void upNext(Context c, JSONArray shows, Lists out) throws Exception {
+        List<JSONObject> items = new ArrayList<>();
+        for (int i = 0; i < shows.length(); i++) if (shows.optJSONObject(i) != null) items.add(shows.optJSONObject(i));
+        Collections.sort(items, (x, y) -> y.optString("last_watched_at").compareTo(x.optString("last_watched_at")));
+        int asked = 0;
+        for (JSONObject item : items) {
+            if (asked >= UP_NEXT_SHOWS) break;
+            String key = key(item, "show");
+            JSONObject ids = item.optJSONObject("show") == null ? null : item.optJSONObject("show").optJSONObject("ids");
+            int trakt = ids == null ? 0 : ids.optInt("trakt");
+            if (key == null || trakt <= 0 || has(out.progress, key)) continue;
+            asked++;
+            JSONObject progress = new JSONObject(get(c, "/shows/" + trakt + "/progress/watched?specials=false&count_specials=false"));
+            JSONObject next = progress.optJSONObject("next_episode");
+            if (next == null || progress.optInt("completed") >= progress.optInt("aired")) continue;
+            out.progress.add(new Progress(key, next.optInt("season"), next.optInt("number"), false));
+        }
+    }
+
+    private static boolean has(List<Progress> list, String key) {
+        for (Progress p : list) if (p.key.equals(key)) return true;
+        return false;
+    }
+
+    /** Trakt's recommendations for the account, in its order. */
+    private static void recommended(Context c, String path, String type, List<String> out) throws Exception {
+        JSONArray a = new JSONArray(get(c, path));
+        for (int i = 0; i < a.length() && out.size() < RECOMMENDED_MAX; i++) {
+            String key = key(a.optJSONObject(i), type);
+            if (key != null && !out.contains(key)) out.add(key);
         }
     }
 
@@ -218,9 +306,12 @@ final class Trakt {
         }
     }
 
-    /** {"movie": {"ids": {"tmdb": 603}}} → "movie:603"; Trakt's "show" is TMDB's "tv". Null without a TMDB id. */
+    /**
+     * {"movie": {"ids": {"tmdb": 603}}} → "movie:603"; Trakt's "show" is TMDB's "tv". The recommendations come without
+     * the wrapper ({"ids": …}). Null without a TMDB id.
+     */
     private static String key(JSONObject item, String type) {
-        JSONObject o = item == null ? null : item.optJSONObject(type);
+        JSONObject o = item == null ? null : item.has(type) ? item.optJSONObject(type) : item;
         JSONObject ids = o == null ? null : o.optJSONObject("ids");
         int tmdb = ids == null ? 0 : ids.optInt("tmdb");
         return tmdb > 0 ? (type.equals("show") ? "tv" : "movie") + ":" + tmdb : null;
