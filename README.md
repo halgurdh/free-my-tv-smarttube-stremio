@@ -6,8 +6,6 @@
 
 **A fast, ad-free home screen for Google TV, LG and Samsung TVs.**
 
-## This fork includes: Stremio and Smarttube support on the Home page (you just need to have them installed) 
-
 Trending picks from your own apps, the weather at a glance, and a look that follows the sunset.<br>
 Open source. Built with Claude Code. One button to undo.
 
@@ -28,6 +26,7 @@ Open source. Built with Claude Code. One button to undo.
 - **Fast.** 60 fps, every frame in 16.6 ms, on the TV's own chip. The home screen uses 96 MB of memory instead of 242 MB (−60%).<br><sub>Measured on a 98″ TCL Google TV running Android 14.</sub>
 - **Set up on the TV.** Language, your city, temperature, theme, how many picks, the weather and prices cards, which coins, and the apps on the shelf, in Free My TV's own settings.
 - **Safe.** No root. Nothing is uninstalled. One button brings back the factory home screen.
+- **Also includes**: Stremio, Trakt.tv sync (login) and Smarttube support on the Home page (you just need to have them installed) 
 
 ## Install
 
