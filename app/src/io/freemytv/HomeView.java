@@ -137,9 +137,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private boolean nightPair;          // the glass holds both photos (day and night), blended by `night`
     private Shader nightGradient;
 
-    // At the top: tabs (0 to 3: Explore, Movies, Shows with a TMDB key, YouTube with a YouTube app) and the round
-    // buttons at the top right (from B0, up to HomeApps.MAX_TOP); the cards
-    private static final int B0 = 4;
+    // At the top: tabs (0 to 4: Explore, Movies, Shows with a TMDB key, YouTube with a YouTube app, Music with genres
+    // picked) and the round buttons at the top right (from B0, up to HomeApps.MAX_TOP); the cards
+    private static final int B0 = 5;
     private int tab, topIndex, cardIndex;
     private int widgetIndex;    // with TalkBack on, the drawer's weather (0) or quotes (1) card can take the focus
     private List<Recs.Pick> cards = new ArrayList<>();
@@ -164,7 +164,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private final int[] ytCol = new int[YT_ROWS];
     private final Spring ytScroll = new Spring(0.4f, 0.9f, 0);
     private final Spring[] ytSlide = new Spring[YT_ROWS];
-    private final RectF ytCard = new RectF(), ytShadow = new RectF();
+    private final RectF ytCard = new RectF(), ytShadow = new RectF(), ytCover = new RectF();
     private final Runnable thumbReady = () -> {
         heroDirty = true;
         wake();
@@ -257,8 +257,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private long lastNanos, resumedAt, lastStep;
     private static final long BURST_MS = 1500;
     /**
-     * A card in the YouTube rows opened an app: the first Home back comes to the same tab and card, like Back; a second
-     * Home resets. keptAt: when that first Home came (the rest of a burst of Home presses counts as it).
+     * A card in the YouTube or Music rows opened an app: the first Home back comes to the same tab and card, like Back;
+     * a second Home resets. keptAt: when that first Home came (the rest of a burst of Home presses counts as it).
      */
     private boolean keepPlace;
     private long keptAt;
@@ -2845,7 +2845,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         int start = Math.max(0, cardIndex - 2), first = Math.max(0, start - 1), last = Math.min(cards.size() - 1, start + 4);
         int room = recs.keep - (last - first + 1);
         for (int t = 0; t < tabKinds.length && room > 0; t++) {
-            if (t == tab || "yt".equals(tabKinds[t])) continue;
+            if (t == tab || "yt".equals(tabKinds[t]) || "music".equals(tabKinds[t])) continue;
             List<Recs.Pick> other = recs.now(tabKinds[t]);
             if (!other.isEmpty()) {
                 recs.backdrop(other.get(0));
@@ -2870,6 +2870,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (YouTube.get(getContext()).on()) {
             kinds.add("yt");
             names.add("YouTube");
+        }
+        if (Music.get(getContext()).on()) {
+            kinds.add("music");
+            names.add(Ui.tr("Music"));
         }
         String[] k2 = kinds.toArray(new String[0]), n2 = names.toArray(new String[0]);
         if (java.util.Arrays.equals(k2, tabKinds) && java.util.Arrays.equals(n2, tabNames)) return;
@@ -2998,11 +3002,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (HomeData.coinCount() > 0) drawQuotes(c);
     }
 
-    // MARK: - The YouTube tab: a row per category
+    // MARK: - The YouTube and Music tabs: a row per category (or genre)
 
-    /** The YouTube tab shows rows (the other tabs, the carousel). */
+    /** The YouTube and Music tabs show rows (the other tabs, the carousel). */
     private boolean rowsMode() {
-        return tabKinds.length > 0 && "yt".equals(tabKinds[tab]);
+        return tabKinds.length > 0 && ("yt".equals(tabKinds[tab]) || "music".equals(tabKinds[tab]));
     }
 
     /** Card i of row r where it is right now (the springs move the page and the rows). */
@@ -3012,9 +3016,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         out.set(x, y, x + YT_CARD_W * k, y + YT_CARD_H * k);
     }
 
-    /** The rows (every 15 s and when YouTube has news): each row keeps its place, the focus stays where it was. */
+    /** The rows (every 15 s and when there's news): each row keeps its place, the focus stays where it was. */
     private void updateRows() {
-        List<YouTube.Row> rows = YouTube.get(getContext()).rows();
+        List<YouTube.Row> rows = "music".equals(tabKinds[tab]) ? Music.get(getContext()).rows() : YouTube.get(getContext()).rows();
         if (!sameRows(rows, ytRows)) {
             ytRows = rows;
             // The titles under the cards, shortened once here (not on every frame).
@@ -3023,7 +3027,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             for (YouTube.Row row : rows) {
                 String[] t = new String[row.picks.size()];
                 for (int i = 0; i < t.length; i++) {
-                    String s = row.picks.get(i).title == null ? "" : row.picks.get(i).title;
+                    Recs.Pick p = row.picks.get(i);
+                    String s = p.title == null ? "" : "music".equals(p.kind) ? p.title + " · " + p.meta : p.title;
                     t[i] = TextUtils.ellipsize(s, fitPaint, YT_CARD_W * k, TextUtils.TruncateAt.END).toString();
                 }
                 ytTitles.add(t);
@@ -3150,8 +3155,16 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     shadows.draw(c, ytShadow, rr, DEEP_BLUR * k, shadowDeep);
                 }
                 Recs.Pick p = row.picks.get(i);
-                Bitmap thumb = "yt".equals(p.kind) ? yt.thumb(p.video, thumbReady) : null;
-                if (thumb != null) {
+                Bitmap thumb = p.thumb != null ? yt.thumb(p.thumb, thumbReady) : null;
+                if (thumb != null && "music".equals(p.kind)) {
+                    // An album cover is square: as high as the card, in its middle, on the card's color.
+                    fill.setShader(null);
+                    fill.setColor(tone(0xFFDADADF, 0xFF2C2C2E));
+                    c.drawRoundRect(cell, rr, rr, fill);
+                    float half = cell.height() / 2;
+                    ytCover.set(cell.centerX() - half, cell.top, cell.centerX() + half, cell.bottom);
+                    roundImage(c, thumb, ytCover, rr, true, 1);
+                } else if (thumb != null) {
                     roundImage(c, thumb, cell, rr, true, 1);
                 } else {
                     fill.setShader(null);

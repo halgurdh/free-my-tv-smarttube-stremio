@@ -285,7 +285,7 @@ final class YouTube {
         return rows.isEmpty() ? new ArrayList<>() : rows.get(0).picks;
     }
 
-    // MARK: - Thumbnails for the rows: YouTube's 320×180 copy (16:9, always there), kept in memory (~115 KB each)
+    // MARK: - Images for the rows: YouTube's 320×180 thumbnails and Deezer's 250×250 covers, kept in memory (~120 KB each)
 
     /** 60 kept (~7 MB), or 30 under 3 GB: still more than the cards on screen, so scrolling back doesn't refetch. */
     private final int maxThumbs;
@@ -298,16 +298,19 @@ final class YouTube {
     private final ExecutorService thumbIo = Executors.newFixedThreadPool(2);
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
 
-    /** The video's thumbnail, or null: it is fetched in the background and `ready` runs on the main thread. */
-    android.graphics.Bitmap thumb(String video, Runnable ready) {
+    /**
+     * A row card's image (Pick.thumb: a video's thumbnail, an album cover), or null: it is fetched in the background and
+     * `ready` runs on the main thread. The Music tab shares this cache.
+     */
+    android.graphics.Bitmap thumb(String url, Runnable ready) {
         synchronized (thumbs) {
-            android.graphics.Bitmap b = thumbs.get(video);
-            if (b != null || !thumbPending.add(video)) return b;
+            android.graphics.Bitmap b = thumbs.get(url);
+            if (b != null || !thumbPending.add(url)) return b;
         }
         thumbIo.execute(() -> {
             android.graphics.Bitmap b = null;
             try {
-                HttpURLConnection h = open("https://i.ytimg.com/vi/" + video + "/mqdefault.jpg");
+                HttpURLConnection h = open(url);
                 try (InputStream in = h.getInputStream()) {
                     android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
                     o.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;
@@ -316,14 +319,14 @@ final class YouTube {
                     h.disconnect();
                 }
             } catch (Exception e) {
-                AppLog.w("youtube thumbnail " + video + ": " + e.getMessage());
+                AppLog.w("thumbnail " + url + ": " + e.getMessage());
             }
             final android.graphics.Bitmap done = b;
             synchronized (thumbs) {
-                if (done != null) thumbs.put(video, done);
+                if (done != null) thumbs.put(url, done);
             }
             // A failed one stays pending until a minute has passed: not fetched again on every frame.
-            main.postDelayed(() -> { synchronized (thumbs) { thumbPending.remove(video); } }, done != null ? 0 : 60_000L);
+            main.postDelayed(() -> { synchronized (thumbs) { thumbPending.remove(url); } }, done != null ? 0 : 60_000L);
             if (done != null) main.post(ready);
         });
         return null;
@@ -356,6 +359,7 @@ final class YouTube {
         Recs.Pick p = new Recs.Pick();
         p.kind = "yt";
         p.video = v.id;
+        p.thumb = "https://i.ytimg.com/vi/" + v.id + "/mqdefault.jpg";   // 320×180, always there
         p.title = v.title;
         p.backdrop = "https://i.ytimg.com/vi/" + v.id + "/maxresdefault.jpg";
         p.link = "https://www.youtube.com/watch?v=" + v.id;
