@@ -59,6 +59,8 @@ About ten minutes. You need a Google TV or Android TV (Android 8 or newer) and a
    adb connect 192.168.1.50:5555
    adb install -r FreeMyTV.apk
    ```
+   Chromecast with Google TV on Android 14 keeps port 5555 closed even with USB debugging on: turn on *Wireless debugging* (Developer options), pair with `adb pair <address:port> <code>`, then run `adb tcpip 5555` over that connection. Port 5555 closes again at every restart, so after one, *Original*, the watchdog and the boot check can't reach ADB until you run `adb tcpip 5555` again (the pairing stays).
+
    On TCL TVs, also let it run in the background (TCL blocks it by default, and the switch never starts):
    ```bash
    adb shell "appops set io.freemytv AUTO_START allow || appops set io.freemytv APP_AUTO_START allow"
@@ -147,6 +149,7 @@ To remove it for good, switch to *Original* first, then uninstall *Free My TV* (
   - on Multilaser TVs, Anoki's screen-content recognition (ACR), the store demo and the manual;
   - on KTC-made TVs (NextStar), Anoki's screen-content recognition (ACR), the store demo and the manual;
   - Google Assistant, only with `disable_assistant=true`.
+- On Google TV, the Assistant's results for films and shows come from Google TV's home app, which is off in Free My TV mode: "Play Stranger Things" ends in "Sorry, I don't understand", and "Search for Stranger Things" shows only YouTube videos. Opening apps, questions and apps' own voice search (YouTube's, for one) still work; *Original* brings it all back.
 - On TCL TVs, the remote's Netflix, YouTube and Prime buttons keep working through a small accessibility service that only reads those buttons. Pick what each one opens in *Free My TV* → *Remote Buttons*; *Original* turns the service off. On Vestel-made TVs (F&U and other store brands) and Xiaomi (Formovie) projectors the same goes for the Netflix button, and on KTC-made TVs (NextStar) for the Tabii button. On Sony TVs, the BRAVIA CORE, Netflix, Disney+, Prime Video, YouTube and Crunchyroll buttons (and Google Play, on remotes that have it) can each open the app you pick, or keep Sony's default.
 - Picture, sound, inputs, remote pairing, Google services and the Play Store are on a protected list, checked before every change, and so are Android's own pieces and factory menus. Before anything goes off, the TV is asked whether its inputs or its remote's Input key depend on it; those stay on.
 - On Google TV, the setup app goes off before the stock home screen and comes back after it, so its recovery screen never takes over the Home button in between.
