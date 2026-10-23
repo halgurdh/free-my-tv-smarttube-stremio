@@ -82,6 +82,10 @@ final class HomeApps {
     private static final String[][] SHELF = {
         {"netflix", "Netflix", "com.netflix.ninja", "E50914", "", "1"},
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.stable", "E62117", "", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.beta", "E62117", "", "1"},
+        {"smarttube", "SmartTube", "com.teamsmart.videomanager.tv", "E62117", "", "1"},     // its older package names
+        {"smarttube", "SmartTube", "com.liskovsoft.smarttubetv.beta", "E62117", "", "1"},
         {"prime", "Prime Video", "com.amazon.amazonvideo.livingroom", "1A98FF", "tint", "0.96"},
         {"disney", "Disney+", "com.disney.disneyplus", "1838C8", "", "1"},
         {"max", "Max", "com.wbd.stream", "6C3BE0", "", "1.32"},
@@ -164,8 +168,9 @@ final class HomeApps {
         List<String> custom = Prefs.shelf();
         if (custom != null) return custom;
         List<String> out = new ArrayList<>();
+        Set<String> keys = new HashSet<>();     // one tile per app, when two of its builds are installed (SmartTube)
         PackageManager pm = c.getPackageManager();
-        for (String[] d : SHELF) if (out.size() < MAX_SHELF && launchIntent(pm, d[2]) != null) out.add(d[2]);
+        for (String[] d : SHELF) if (out.size() < MAX_SHELF && launchIntent(pm, d[2]) != null && keys.add(d[0])) out.add(d[2]);
         return out;
     }
 
