@@ -256,6 +256,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private boolean drawerWasMoving, idle;
     private long lastNanos, resumedAt, lastStep;
     private static final long BURST_MS = 1500;
+    /**
+     * A card in the YouTube rows opened an app: the first Home back comes to the same tab and card, like Back; a second
+     * Home resets. keptAt: when that first Home came (the rest of a burst of Home presses counts as it).
+     */
+    private boolean keepPlace;
+    private long keptAt;
     private int w, h;
     private float k = 1;
     private String clockText = "", dateText = "", weatherLine = "";
@@ -487,6 +493,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     /** Starting state (Home pressed while the home screen is showing): first app focused, drawer and sheet closed. */
     void reset(boolean animated) {
         wake();
+        long now = SystemClock.uptimeMillis();
+        if (keepPlace) {
+            keepPlace = false;
+            keptAt = now;
+            return;
+        }
+        if (keptAt != 0 && now - keptAt < BURST_MS) return;
         cancelReorder(!animated);
         zone = Z_SHELF;
         shelfIndex = 0;
@@ -2286,6 +2299,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (rowsMode()) {
                 ytCardRect(ytRow, cardIndex, ytCard);
                 r = ytCard;
+                keepPlace = true;
             }
             YouTube.get(getContext()).opened(p);
         } else {
