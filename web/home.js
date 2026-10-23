@@ -500,7 +500,7 @@
       {label: tr('Theme'), value: theme === 'light' ? tr('Light') : theme === 'dark' ? tr('Dark') : auto,
         step: function (d) { cycle('theme', ['auto', 'light', 'dark'], theme, d); checkNight(); }},
       {label: tr('Picks per tab'), value: String(Prefs.cards()),
-        step: function (d) { Prefs.set('cards', 3 + (Prefs.cards() - 3 + (d || 1) + 4) % 4); renderCards(); }},
+        step: function (d) { Prefs.set('cards', 3 * (1 + (Prefs.cards() / 3 - 1 + (d || 1) + 3) % 3)); renderCards(); }},   // 3, 6, 9
       {label: tr('Weather widget'), toggle: Prefs.weather(),
         step: function () { Prefs.set('weather', !Prefs.weather()); renderPanels(); }},
       {label: tr('Quotes widget'), toggle: Prefs.quotes(),

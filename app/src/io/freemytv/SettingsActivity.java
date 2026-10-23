@@ -823,8 +823,8 @@ public class SettingsActivity extends Activity {
                 }
                 case 3: Prefs.setSounds(!Prefs.sounds()); break;
                 case 4: {
-                    int n = Prefs.cards() - 3, span = Recs.MAX_CARDS - 3 + 1;
-                    Prefs.setCards(3 + (n + dir + span) % span);
+                    int n = Prefs.cards() / 3 - 1, span = Recs.MAX_CARDS / 3;   // 3, 6, 9
+                    Prefs.setCards(3 * (1 + (n + dir + span) % span));
                     break;
                 }
                 case 5: Prefs.setWeather(!Prefs.weather()); break;
