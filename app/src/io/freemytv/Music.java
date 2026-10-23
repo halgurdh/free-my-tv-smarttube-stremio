@@ -204,7 +204,8 @@ final class Music {
     void refreshIfStale(Runnable done) {
         if (fetching || !on()) return;
         List<String> picked = Prefs.musicGenres();
-        String key = "songs|" + String.join(",", picked) + "|" + Ui.language;    // "songs": fetched again after the albums
+        // A new hour is news too: each hour shows other songs (hour()), so they come on the hour.
+        String key = "songs|" + hour() + "|" + String.join(",", picked) + "|" + Ui.language;
         long now = System.currentTimeMillis();
         boolean changed = !key.equals(fetchedFor);
         if (!changed && now - fetchedAt < EVERY && now >= fetchedAt) return;
@@ -216,8 +217,7 @@ final class Music {
                 JSONObject c = new JSONObject();
                 for (String id : picked) {
                     try {
-                        c.put(id, id.startsWith("q:") ? playlist(id.substring(2))
-                                : new JSONObject(get("/chart/" + id + "/tracks?limit=" + Recs.MAX_CARDS)).optJSONArray("data"));
+                        c.put(id, id.startsWith("q:") ? playlist(id.substring(2)) : chart(id));
                     } catch (Exception e) {
                         AppLog.w("music chart " + id + ": " + e.getMessage());
                         if (charts.has(id)) c.put(id, charts.get(id));    // keeps what it had
@@ -267,7 +267,43 @@ final class Music {
                 break;
             }
         }
-        return new JSONObject(get("/playlist/" + best.optLong("id") + "/tracks?limit=" + Recs.MAX_CARDS)).optJSONArray("data");
+        // This hour's 9: a stretch of the playlist picked at random each hour (only 9 songs are fetched).
+        int size = Math.max(1, best.optInt("nb_tracks", Recs.MAX_CARDS));
+        int start = shuffle(words).nextInt(size);
+        String songs = "/playlist/" + best.optLong("id") + "/tracks?limit=";
+        JSONArray out = songs(songs + Recs.MAX_CARDS + "&index=" + start);
+        if (out.length() < Recs.MAX_CARDS && start > 0) {       // past the end: on from the top
+            JSONArray more = songs(songs + (Recs.MAX_CARDS - out.length()) + "&index=0");
+            for (int i = 0; i < more.length(); i++) out.put(more.get(i));
+        }
+        return out;
+    }
+
+    /**
+     * A chart genre's 9: its top 3 always, then 6 from a stretch of its top 50 picked at random each hour. Two small
+     * requests, and still this week's songs.
+     */
+    private static JSONArray chart(String id) throws Exception {
+        int top = 3, rest = Recs.MAX_CARDS - top;
+        JSONArray out = songs("/chart/" + id + "/tracks?limit=" + top);
+        JSONArray more = songs("/chart/" + id + "/tracks?limit=" + rest + "&index=" + (top + shuffle(id).nextInt(50 - top - rest + 1)));
+        for (int i = 0; i < more.length(); i++) out.put(more.get(i));
+        return out;
+    }
+
+    private static JSONArray songs(String path) throws Exception {
+        JSONArray a = new JSONObject(get(path)).optJSONArray("data");
+        return a == null ? new JSONArray() : a;
+    }
+
+    /** Hours since 1970: which songs show now. */
+    private static long hour() {
+        return System.currentTimeMillis() / 3_600_000L;
+    }
+
+    /** Random, but the same all hour for this genre: the rows don't jump while you browse, and differ per genre. */
+    private static java.util.Random shuffle(String genre) {
+        return new java.util.Random(hour() * 31 + genre.hashCode());
     }
 
     /** Genre id → Deezer's name for it, in the TV's language. */
