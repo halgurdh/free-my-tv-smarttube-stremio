@@ -106,8 +106,14 @@ final class Recs {
         {"amediateka", "amediateka", "ru.amediateka"},
         {"more tv", "wink", "ru.rt.video.app.tv"},   // TMDB: "More TV" (more.tv is part of Rostelecom's Wink now)
     };
+    /**
+     * With open_in_stremio=true and Stremio on the TV: a pick from one of the TV's apps opens on its page in Stremio
+     * (stremio:///detail/<type>/<imdb id>) instead of in that app. Only an Open in: what is picked doesn't change.
+     */
+    private static final String STREMIO = "com.stremio.one";
     private static final Map<String, String> SERVICE_NAME = new HashMap<>();
     static {
+        SERVICE_NAME.put("stremio", "Stremio");
         SERVICE_NAME.put("netflix", "Netflix");
         SERVICE_NAME.put("prime", "Prime Video");
         SERVICE_NAME.put("disney", "Disney+");
@@ -619,7 +625,7 @@ final class Recs {
     /** Genre, runtime (or seasons) and the service it's on, among the ones the TV has. */
     private void fetchDetails(Pick p) throws Exception {
         JSONObject o = get("/" + p.kind + "/" + p.id
-                + "?language=" + lang() + "&append_to_response=watch/providers,images&include_image_language=null," + Ui.language.replaceAll("-.*", "") + ",en");
+                + "?language=" + lang() + "&append_to_response=watch/providers,images,external_ids&include_image_language=null," + Ui.language.replaceAll("-.*", "") + ",en");
         p.title = title(p, o);
         String poster = o.optString("poster_path", "");
         if (!poster.isEmpty() && !"null".equals(poster)) p.poster = poster;
@@ -652,6 +658,13 @@ final class Recs {
         }
         if (p.app != null) parts.add(SERVICE_NAME.get(p.app));
         if (p.tag != null) parts.add(0, p.tag);
+        JSONObject ext = o.optJSONObject("external_ids");
+        String imdb = ext == null ? "" : ext.optString("imdb_id", "");
+        if (p.app != null && stremio() && imdb.startsWith("tt")) {     // the meta still names the TV's app it's on
+            p.app = "stremio";
+            p.pkg = STREMIO;
+            p.link = "stremio:///detail/" + (p.kind.equals("movie") ? "movie" : "series") + "/" + imdb;
+        }
         p.meta = String.join(" · ", parts);
         p.detailed = true;
     }
@@ -742,8 +755,13 @@ final class Recs {
         return HomeApps.launchIntent(context.getPackageManager(), pkg) != null;
     }
 
+    private boolean stremio() {
+        return Config.OPEN_IN_STREMIO && HomeApps.launchIntent(context.getPackageManager(), STREMIO) != null;
+    }
+
     private long sourceStamp() {
         long stamp = (Config.TMDB_KEY.hashCode() * 31L + REGION.hashCode()) * 31L + (Config.HIDE_ANIMATION ? 1 : 0);
+        stamp = stamp * 31L + (stremio() ? 1 : 0);
         for (String[] service : SERVICES) stamp = stamp * 31L + (installed(service[2]) ? service[2].hashCode() : 0);
         return stamp * 31L + Trakt.stamp(context);   // signing in or out of Trakt fetches the picks again
     }
