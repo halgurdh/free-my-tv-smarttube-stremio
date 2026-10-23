@@ -36,7 +36,7 @@ import java.util.concurrent.Executors;
 /**
  * Home screen picks ("This morning / afternoon / tonight"): what's trending this week plus recent releases, only from
  * the streaming apps installed on the TV (Netflix, Prime Video, Disney+, Max, Apple TV, Okko, Hulu, Paramount+, Peacock,
- * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). 3 per hour, or up to 6 (Home Settings).
+ * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). 3 per hour, or 6 or 9 (Home Settings).
  * "Watch" opens the service's app.
  *
  * Each person uses their own free TMDB key (config.properties "tmdb_key", built into the app). It never goes to the log.
@@ -57,8 +57,8 @@ final class Recs {
 
     interface Listener { void onRecs(); }
 
-    /** The most cards per tab and hour (Prefs.cards() picks how many, 3 by default); the home screen shows 3 at a time and scrolls. */
-    static final int MAX_CARDS = 6;   // also the videos in each YouTube row
+    /** The most cards per tab and hour (Prefs.cards(): 3, 6 or 9, 3 by default); the home screen shows 3 at a time and scrolls. */
+    static final int MAX_CARDS = 9;   // also the videos in each YouTube row
 
     private static final String API = "https://api.themoviedb.org/3";
     /** The backdrops: on a 720p UI, TMDB's 1280-wide copy shows the same and is lighter to download and decode. */
@@ -154,19 +154,22 @@ final class Recs {
     }
 
     private final Context context;
+    /** How many backgrounds stay built in memory (HomeView preloads within it). */
+    final int keep;
     private final SharedPreferences cache;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
     private final Map<String, Bitmap> posters = new LinkedHashMap<>();   // narrow-card portraits, same keys as images
-    private final Map<String, Backdrop> images = new LinkedHashMap<>();   // this hour's, built and ready to draw
+    // This hour's, built and ready to draw; the least recently drawn goes first (a card on screen is never the one dropped).
+    private final Map<String, Backdrop> images = new LinkedHashMap<>(16, 0.75f, true);
     private final java.util.Set<String> pending = new java.util.HashSet<>();
     private volatile List<Pick> picks = new ArrayList<>();
     private volatile int period = -1;
     private volatile long listAt;
     private volatile boolean fetching;
     private volatile String error = "";
-    private volatile boolean light;     // light design: builds only the cards (all three tabs' cards fit in memory)
+    private volatile boolean light;     // light design: builds only the cards (those around the focus, up to keep)
     private volatile long failedAt, keyStamp, linkRetryAt;
     private volatile String listLanguage = "";   // language used for the saved titles, genres and texts
     private volatile String traktActivity = "";  // Trakt's last change when the picks were fetched
@@ -175,6 +178,10 @@ final class Recs {
     private Recs(Context c) {
         context = c;
         cache = c.getSharedPreferences("recs", Context.MODE_PRIVATE);
+        // Backgrounds kept ready (~4 MB each with the poster): the cards on screen and one past each edge
+        // (HomeView.preloadCards), and with room, each other tab's first. With little memory, only the row around the
+        // focus: the next card loads as the row moves.
+        keep = smallMemory(c) ? 6 : 13;
         if (cache.getInt("version", 0) != CACHE_VERSION) cache.edit().clear().putInt("version", CACHE_VERSION).apply();
         try {
             String saved = cache.getString("picks", null);
@@ -186,6 +193,14 @@ final class Recs {
             traktActivity = cache.getString("traktActivity", "");
         } catch (Exception ignored) {
         }
+    }
+
+    /** Under 3 GB: most TVs have 1.5 to 2.5, and Android flags few of them as low on memory. */
+    private static boolean smallMemory(Context c) {
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mem = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mem);
+        return am.isLowRamDevice() || mem.totalMem < 3L << 30;
     }
 
     void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); }
@@ -858,7 +873,7 @@ final class Recs {
         return key.isEmpty() ? null : key;
     }
 
-    // MARK: - Images (TMDB originals and YouTube backgrounds on disk, up to 80; this hour's kept ready in memory)
+    // MARK: - Images (TMDB originals, posters and YouTube backgrounds on disk, up to 80; those around the focus kept ready in memory)
 
     private void download(Pick p) throws IOException {
         File f = imageFile(p);
@@ -933,7 +948,7 @@ final class Recs {
             synchronized (images) {
                 images.put(p.backdrop, backdrop);
                 if (poster != null) posters.put(p.backdrop, poster);
-                while (images.size() > (forLight ? Prefs.cards() + 7 : 4)) images.remove(images.keySet().iterator().next());
+                while (images.size() > (forLight ? keep : 4)) images.remove(images.keySet().iterator().next());
                 posters.keySet().retainAll(images.keySet());
             }
             notifyListeners();
