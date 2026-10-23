@@ -314,6 +314,8 @@ final class YouTube {
                 try (InputStream in = h.getInputStream()) {
                     android.graphics.BitmapFactory.Options o = new android.graphics.BitmapFactory.Options();
                     o.inPreferredConfig = android.graphics.Bitmap.Config.RGB_565;
+                    // On a 720p UI a card is ~113 px high: Deezer's 250 px covers at half size are still sharp there.
+                    if (Backdrop.W <= 1280 && url.contains("dzcdn.net")) o.inSampleSize = 2;
                     b = android.graphics.BitmapFactory.decodeStream(in, null, o);
                 } finally {
                     h.disconnect();
