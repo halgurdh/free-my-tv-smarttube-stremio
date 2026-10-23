@@ -2294,7 +2294,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 return;
             }
             if (p == null || p.pkg == null) return;
-            it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
+            Music music = Music.get(getContext());
+            it = HomeApps.app(p.pkg, Recs.serviceName(p), music.playing(p) ? null : p.link);   // the same song: just its app
+            music.opened(p);
             r = cardRects[cardIndex];
             if (rowsMode()) {
                 ytCardRect(ytRow, cardIndex, ytCard);
