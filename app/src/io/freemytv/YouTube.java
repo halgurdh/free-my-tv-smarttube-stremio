@@ -211,8 +211,10 @@ final class YouTube {
 
     /**
      * The tab's rows: one per picked category (or the mix), each with its best-scored videos (newest first, the channels
-     * opened most moved up), one per channel while there are other channels to pick from. Rows with no videos yet are
-     * left out; the first time, the first row starts with the "choose your categories" card.
+     * opened most moved up), one per channel while there are other channels to pick from. A row short of recent videos
+     * (channels that post monthly) fills up with older ones from the feeds, newest first, so a video opened here makes
+     * room for another. Rows with no videos yet are left out; the first time, the first row starts with the "choose your
+     * categories" card.
      */
     List<Row> rows() {
         List<Row> out = new ArrayList<>();
@@ -220,21 +222,23 @@ final class YouTube {
         if (app == null) return out;
         long now = System.currentTimeMillis();
         Set<String> seen = new HashSet<>(store.getStringSet("seen", Collections.<String>emptySet()));
-        List<Video> fresh = new ArrayList<>();
+        List<Video> fresh = new ArrayList<>(), older = new ArrayList<>();
         boolean hideAi = Prefs.youtubeHideAi();
         for (Video v : videos) {
-            if (!seen.contains(v.id) && now - v.published < MAX_AGE && !(hideAi && AI.matcher(v.title).find())) fresh.add(v);
+            if (seen.contains(v.id) || (hideAi && AI.matcher(v.title).find())) continue;
+            (now - v.published < MAX_AGE ? fresh : older).add(v);
         }
         Map<String, Double> score = new HashMap<>();
         for (Video v : fresh) score.put(v.id, score(v, now));
         Collections.sort(fresh, (a, b) -> Double.compare(score.get(b.id), score.get(a.id)));
+        Collections.sort(older, (a, b) -> Long.compare(b.published, a.published));
         if (configured()) {
-            fill(out, "YouTube", channels(), fresh, app, now);
+            fill(out, "YouTube", channels(), fresh, older, app, now);
         } else {
             List<String> picked = Prefs.youtubeCategories();
             if (picked == null || picked.isEmpty()) picked = java.util.Arrays.asList(MIX);
             for (String[] c : CATEGORIES) {
-                if (picked.contains(c[0])) fill(out, name(c), java.util.Arrays.asList(c).subList(FIRST_CHANNEL, c.length), fresh, app, now);
+                if (picked.contains(c[0])) fill(out, name(c), java.util.Arrays.asList(c).subList(FIRST_CHANNEL, c.length), fresh, older, app, now);
             }
         }
         if (needsSetup()) {
@@ -246,11 +250,18 @@ final class YouTube {
         return out;
     }
 
-    /** Adds a row with the videos of these channels, if it has any. */
-    private void fill(List<Row> rows, String title, List<String> channels, List<Video> sorted, String[] app, long now) {
+    /** Adds a row with the videos of these channels, if it has any: the recent ones, then older ones while it's short. */
+    private void fill(List<Row> rows, String title, List<String> channels, List<Video> fresh, List<Video> older,
+            String[] app, long now) {
         Set<String> wanted = new HashSet<>(channels);
         Row row = new Row(title);
-        // One per channel first, then a second from each, then any: a channel that posts all day doesn't fill the row.
+        add(row, wanted, fresh, app, now);
+        add(row, wanted, older, app, now);
+        if (!row.picks.isEmpty()) rows.add(row);
+    }
+
+    /** One per channel first, then a second from each, then any: a channel that posts all day doesn't fill the row. */
+    private static void add(Row row, Set<String> wanted, List<Video> sorted, String[] app, long now) {
         Map<String, Integer> perChannel = new HashMap<>();
         for (int pass = 1; pass <= 3 && row.picks.size() < Recs.MAX_CARDS; pass++) {
             for (Video v : sorted) {
@@ -262,7 +273,6 @@ final class YouTube {
                 row.picks.add(pick(v, app, now));
             }
         }
-        if (!row.picks.isEmpty()) rows.add(row);
     }
 
     /** The first row's videos (Recs.now("yt"): the home screen preloads the backdrops of the first ones). */
@@ -364,7 +374,11 @@ final class YouTube {
         for (Video v : videos) if (v.id.equals(p.video)) channel = v.channelId;
         Set<String> seen = new HashSet<>(store.getStringSet("seen", Collections.<String>emptySet()));
         seen.add(p.video);
-        if (seen.size() > 300) seen.clear();    // old ones are past MAX_AGE anyway
+        if (seen.size() > 300) {     // only the ones still in the feeds matter (older videos fill short rows)
+            Set<String> current = new HashSet<>();
+            for (Video v : videos) current.add(v.id);
+            seen.retainAll(current);
+        }
         SharedPreferences.Editor e = store.edit().putStringSet("seen", seen);
         if (channel != null) e.putInt("opens:" + channel, store.getInt("opens:" + channel, 0) + 1);
         e.apply();
