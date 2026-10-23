@@ -116,6 +116,14 @@ final class Music {
         }
     }
 
+    /** The genres in alphabetical order of their names in the TV's language (Settings > Music and the tab's rows). */
+    String[][] sorted() {
+        String[][] out = GENRES.clone();
+        java.text.Collator order = java.text.Collator.getInstance(Ui.locale());
+        java.util.Arrays.sort(out, (a, b) -> order.compare(name(a), name(b)));
+        return out;
+    }
+
     /** Genres picked and a music app on the TV: the home screen shows the Music tab. */
     boolean on() {
         return !Prefs.musicGenres().isEmpty() && app() != null;
@@ -128,13 +136,13 @@ final class Music {
         return null;
     }
 
-    /** The tab's rows: one per picked genre (in GENRES order), its songs; genres not fetched yet are left out. */
+    /** The tab's rows: one per picked genre (in alphabetical order), its songs; genres not fetched yet are left out. */
     List<YouTube.Row> rows() {
         List<YouTube.Row> out = new ArrayList<>();
         String[] app = app();
         if (app == null) return out;
         List<String> picked = Prefs.musicGenres();
-        for (String[] g : GENRES) {
+        for (String[] g : sorted()) {
             if (!picked.contains(g[0])) continue;
             JSONArray albums = charts.optJSONArray(g[0]);
             if (albums == null || albums.length() == 0) continue;
