@@ -145,6 +145,7 @@ public class SettingsActivity extends Activity {
         private boolean ytFromHome;
         // The Music tab's genres (Deezer ids, Music.GENRES).
         private final List<String> musicPicked = new ArrayList<>();
+        private String[][] musicList = Music.GENRES;     // in alphabetical order, made when the screen opens
         private static final int PICK_CITY = 0, PICK_LANGUAGE = -1;
         private final List<String[]> cities = new ArrayList<>();
         private String cityStatus = "";
@@ -257,7 +258,7 @@ public class SettingsActivity extends Activity {
                 case MUSIC_EDIT: {
                     int at = pickScroll + row;
                     if (at >= Music.GENRES.length) return "";
-                    String[] g = Music.GENRES[at];
+                    String[] g = musicList[at];
                     return Music.get(getContext()).name(g) + ", " + (musicPicked.contains(g[0]) ? Ui.tr("chosen") : Ui.tr("not chosen"));
                 }
                 case SHELF_EDIT: {
@@ -1000,7 +1001,12 @@ public class SettingsActivity extends Activity {
         private void openMusic() {
             musicPicked.clear();
             musicPicked.addAll(Prefs.musicGenres());
-            Music.get(getContext()).fetchNames(() -> handler.post(this::invalidate));
+            Music music = Music.get(getContext());
+            musicList = music.sorted();
+            music.fetchNames(() -> handler.post(() -> {     // Deezer's names arrived: sorted again by them
+                musicList = music.sorted();
+                invalidate();
+            }));
             pickScroll = 0;
             focus = 0;
             screen = MUSIC_EDIT;
@@ -1010,7 +1016,7 @@ public class SettingsActivity extends Activity {
 
         /** OK: picks the genre or takes it out, saved right away; past the most, nothing is added. */
         private void toggleMusic() {
-            String id = Music.GENRES[pickScroll + focus][0];
+            String id = musicList[pickScroll + focus][0];
             if (!musicPicked.remove(id) && musicPicked.size() < Music.MAX_GENRES) musicPicked.add(id);
             Prefs.setMusicGenres(musicPicked);
         }
@@ -1024,7 +1030,7 @@ public class SettingsActivity extends Activity {
                 float y = (LIST_TOP + 20 + i * (LIST_ROW_H + LIST_ROW_GAP)) * k;
                 rowRect.set(LIST_X * k, y, LIST_R * k, y + LIST_ROW_H * k);
                 float f = drawRowBackground(c, i);
-                String[] g = Music.GENRES[pickScroll + i];
+                String[] g = musicList[pickScroll + i];
                 boolean on = musicPicked.contains(g[0]);
                 rowLabel.setColor(blend(on ? 0xF2FFFFFF : 0x99FFFFFF, on ? INK : 0x991C1C1E, f));
                 c.drawText(music.name(g), rowRect.left + 30 * k, rowRect.centerY() + Ui.halfCap(rowLabel), rowLabel);
