@@ -19,8 +19,8 @@ import java.util.concurrent.Executors;
 
 /**
  * The Music tab (optional: it shows once genres are picked in Settings > Music, up to MAX_GENRES): a row per genre with
- * this week's top albums in the TV's country, from Deezer's public charts, or for a style Deezer has no chart for (lofi,
- * K-pop, house…) the songs of Deezer's own playlist for it. No key, no account. The chart genres' names come from Deezer
+ * this week's top songs in the TV's country, from Deezer's public charts (its album charts lag years behind), or for a
+ * style Deezer has no chart for (lofi, K-pop, house…) the songs of Deezer's own playlist for it. No key, no account. The chart genres' names come from Deezer
  * in the TV's language. They open in the music app on the shelf (Spotify, YouTube Music, Deezer, Tidal, Apple Music):
  * Spotify plays the best match, the others open on their home.
  */
@@ -68,6 +68,9 @@ final class Music {
     private volatile long fetchedAt, failedAt;
     private volatile String fetchedFor = "";
     private volatile boolean fetching;
+    // The song last opened from the tab, and until when it may still be playing (its length after it was opened).
+    private String lastKey = "";
+    private long lastUntil;
 
     private Music(Context c) {
         context = c;
@@ -125,7 +128,7 @@ final class Music {
         return null;
     }
 
-    /** The tab's rows: one per picked genre (in GENRES order), its albums or songs; genres not fetched yet are left out. */
+    /** The tab's rows: one per picked genre (in GENRES order), its songs; genres not fetched yet are left out. */
     List<YouTube.Row> rows() {
         List<YouTube.Row> out = new ArrayList<>();
         String[] app = app();
@@ -151,8 +154,7 @@ final class Music {
         p.id = a.optInt("id");
         p.title = a.optString("title");
         String artist = a.optJSONObject("artist") == null ? "" : a.optJSONObject("artist").optString("name");
-        p.thumb = a.optString("cover_medium", null);     // an album; a song has its album's
-        if (p.thumb == null && a.optJSONObject("album") != null) p.thumb = a.optJSONObject("album").optString("cover_medium", null);
+        p.thumb = a.optJSONObject("album") == null ? null : a.optJSONObject("album").optString("cover_medium", null);
         p.pkg = app[0];
         p.app = app[1];
         p.meta = artist;
@@ -166,11 +168,35 @@ final class Music {
         return p;
     }
 
+    /**
+     * Whether this song was the last one opened and may still be playing: then OK only brings its app forward (Spotify
+     * would start it over). After its length, or for another song, it plays again.
+     */
+    boolean playing(Recs.Pick p) {
+        return Recs.key(p).equals(lastKey) && android.os.SystemClock.elapsedRealtime() < lastUntil;
+    }
+
+    /** A song was opened from the tab: remembered for its length (Deezer's, in seconds; 4 minutes when unknown). */
+    void opened(Recs.Pick p) {
+        if (!"music".equals(p.kind)) return;
+        int seconds = 240;
+        java.util.Iterator<String> genres = charts.keys();
+        while (genres.hasNext()) {
+            JSONArray songs = charts.optJSONArray(genres.next());
+            for (int i = 0; songs != null && i < songs.length(); i++) {
+                JSONObject s = songs.optJSONObject(i);
+                if (s != null && s.optInt("id") == p.id && s.optInt("duration") > 0) seconds = s.optInt("duration");
+            }
+        }
+        lastKey = Recs.key(p);
+        lastUntil = android.os.SystemClock.elapsedRealtime() + seconds * 1000L;
+    }
+
     /** Fetches the picked genres' charts once an hour (after a failure, not for 10 minutes); `done` runs when there's news. */
     void refreshIfStale(Runnable done) {
         if (fetching || !on()) return;
         List<String> picked = Prefs.musicGenres();
-        String key = String.join(",", picked) + "|" + Ui.language;
+        String key = "songs|" + String.join(",", picked) + "|" + Ui.language;    // "songs": fetched again after the albums
         long now = System.currentTimeMillis();
         boolean changed = !key.equals(fetchedFor);
         if (!changed && now - fetchedAt < EVERY && now >= fetchedAt) return;
@@ -183,7 +209,7 @@ final class Music {
                 for (String id : picked) {
                     try {
                         c.put(id, id.startsWith("q:") ? playlist(id.substring(2))
-                                : new JSONObject(get("/chart/" + id + "/albums?limit=" + Recs.MAX_CARDS)).optJSONArray("data"));
+                                : new JSONObject(get("/chart/" + id + "/tracks?limit=" + Recs.MAX_CARDS)).optJSONArray("data"));
                     } catch (Exception e) {
                         AppLog.w("music chart " + id + ": " + e.getMessage());
                         if (charts.has(id)) c.put(id, charts.get(id));    // keeps what it had
