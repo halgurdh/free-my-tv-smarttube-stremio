@@ -130,6 +130,10 @@ final class YouTube {
 
     private YouTube(Context c) {
         context = c;
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mem = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mem);
+        maxThumbs = am.isLowRamDevice() || mem.totalMem < 3L << 30 ? 30 : 60;
         store = c.getSharedPreferences("youtube", Context.MODE_PRIVATE);
         try {
             videos = parse(new JSONArray(store.getString("videos", "[]")));
@@ -283,9 +287,11 @@ final class YouTube {
 
     // MARK: - Thumbnails for the rows: YouTube's 320×180 copy (16:9, always there), kept in memory (~115 KB each)
 
+    /** 60 kept (~7 MB), or 30 under 3 GB: still more than the cards on screen, so scrolling back doesn't refetch. */
+    private final int maxThumbs;
     private final Map<String, android.graphics.Bitmap> thumbs = new java.util.LinkedHashMap<String, android.graphics.Bitmap>(64, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, android.graphics.Bitmap> eldest) {
-            return size() > 60;
+            return size() > maxThumbs;
         }
     };
     private final Set<String> thumbPending = new HashSet<>();
