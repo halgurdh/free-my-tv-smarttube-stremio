@@ -48,6 +48,7 @@ final class Recs {
         String title, backdrop, poster, meta = "", app, pkg;   // poster: the portrait image of the narrow cards
         String link;            // opens the title in its app (looked up with Watchmode), or null: the app's home
         String video;           // YouTube tab (kind "yt"): the video's id
+        String thumb;           // YouTube and Music rows: the small image on the card (a video thumbnail, an album cover)
         boolean detailed;
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
@@ -119,6 +120,11 @@ final class Recs {
         SERVICE_NAME.put("wink", "Wink");
         SERVICE_NAME.put("smarttube", "SmartTube");
         SERVICE_NAME.put("youtube", "YouTube");
+        SERVICE_NAME.put("spotify", "Spotify");
+        SERVICE_NAME.put("ytmusic", "YouTube Music");
+        SERVICE_NAME.put("deezer", "Deezer");
+        SERVICE_NAME.put("tidal", "TIDAL");
+        SERVICE_NAME.put("applemusic", "Apple Music");
     }
     /** Country for "what streams where" (config.properties "tmdb_region", e.g. US, GB, BR). */
     static final String REGION = Place.region();
@@ -276,6 +282,7 @@ final class Recs {
     /** With a key: fetches the list if stale or the time of day (morning/afternoon/night) changed; then the details. */
     void refreshIfStale() {
         YouTube.get(context).refreshIfStale(this::notifyListeners);
+        Music.get(context).refreshIfStale(this::notifyListeners);
         if (!hasKey(context) || fetching) return;
         long now = System.currentTimeMillis();
         long stamp = sourceStamp();   // a new key, country, animation choice or installed streaming-app set refetches

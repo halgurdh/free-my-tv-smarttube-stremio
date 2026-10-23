@@ -242,6 +242,19 @@ final class Prefs {
 
     static void setSleepPlace(int place) { sp().edit().putInt("sleepPlace", place).apply(); }
 
+    // MARK: - Music tab
+
+    /** The Music tab's genres (Deezer genre ids, Music.GENRES): none picked, no Music tab. */
+    static List<String> musicGenres() {
+        List<String> out = new ArrayList<>();
+        for (String p : sp().getString("music", "").split(",")) if (!p.isEmpty()) out.add(p);
+        return out;
+    }
+
+    static void setMusicGenres(List<String> ids) {
+        put("music", String.join(",", ids));
+    }
+
     // MARK: - Top buttons
 
     /**
