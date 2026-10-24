@@ -1300,6 +1300,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         else c.drawText(stale, right - total - 24 * k, base, staleQuote);
     }
 
+    /** 0 to 1: how much the shelf has the focus (drawTiles works it out, drawShelfTile shades the other tiles by it). */
+    private float shelfOn;
+
     private void drawTiles(Canvas c) {
         // The focused one last: it grows over its neighbors without being covered by them.
         int top = -1;
@@ -1311,6 +1314,22 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             }
         }
         if (liftIndex >= 0 && liftIndex < shelf.size() && moveLift.value > 0.02f) top = liftIndex;
+        // How much the shelf has the focus: the focus springs add up to about 1 while it moves from tile to tile, so the
+        // other tiles' shade doesn't flicker and fades as the focus leaves the shelf.
+        float on = 0;
+        for (int i = 0; i < shelf.size(); i++) on += Math.max(0, tileFocus[i].value);
+        shelfOn = Math.min(1, on);
+        // The whole shelf shows it has the focus too: a rim just outside its glass (dark by day: white wouldn't show on
+        // white glass). Here and not on the glass's layer, which only changes with the background.
+        if (shelfOn > 0.01f && !shelf.isEmpty()) {
+            float out = 6 * k, radius = (TILE_RADIUS + SHELF_PAD) * k + out;
+            tmp.set(platterRect.left - out, platterRect.top - out, platterRect.right + out, platterRect.bottom + out);
+            rim.setShader(null);
+            rim.setColor(Ui.alpha(tone(0xFF3A3A3C, 0xFFFFFFFF), tone(0.45f, 0.8f) * shelfOn));
+            rim.setStrokeWidth(3 * k);
+            c.drawRoundRect(tmp, radius, radius, rim);
+            rim.setStrokeWidth(2.5f * k);
+        }
         for (int pass = 0; pass < 2; pass++) {
             for (int i = 0; i < shelf.size(); i++) {
                 if ((pass == 0) == (i == top)) continue;
@@ -1389,6 +1408,20 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             drawLogo(c, it, cell, s, 0);
         } else {
             if (it.tile != null) roundImage(c, it.tile, cell, r);
+        }
+        // Which one has the focus, at a glance: a light rim on it (as on the focused card) and a shade on the others.
+        float shade = shelfOn * (1 - fc) * (1 - Ui.clamp(l));
+        if (shade > 0.01f) {
+            tileFill.setShader(null);
+            tileFill.setColor(Ui.alpha(0xFF000000, tone(0.34f, 0.48f) * shade));
+            c.drawRoundRect(cell, r, r, tileFill);
+        }
+        if (fc > 0.01f) {
+            float inset = 1.25f * k;
+            tmp.set(cell.left + inset, cell.top + inset, cell.right - inset, cell.bottom - inset);
+            rim.setShader(null);
+            rim.setColor(Ui.alpha(0xFFFFFFFF, 0.85f * fc));
+            c.drawRoundRect(tmp, r - inset, r - inset, rim);
         }
     }
 
