@@ -158,6 +158,11 @@ final class Recs {
     final int keep;
     private final SharedPreferences cache;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /**
+     * The images get their own thread: after a night in standby the list is stale, and its dozens of TMDB and Trakt
+     * requests (each waiting up to 8 s while the Wi-Fi comes back) held up the cards on screen, already on disk.
+     */
+    private final ExecutorService decode = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
     private final Map<String, Bitmap> posters = new LinkedHashMap<>();   // narrow-card portraits, same keys as images
@@ -305,7 +310,7 @@ final class Recs {
             if (b != null) return b;
             if (!pending.add(key)) return null;
         }
-        io.execute(() -> {
+        decode.execute(() -> {
             try {
                 loadImage(p);
             } finally {
@@ -906,7 +911,8 @@ final class Recs {
     private void fetchFile(File f, HttpURLConnection c) throws IOException {
         //noinspection ResultOfMethodCallIgnored
         f.getParentFile().mkdirs();
-        File part = new File(f.getPath() + ".part");
+        // One per thread: the list's thread and the images' one may download the same file at once.
+        File part = new File(f.getPath() + "." + Thread.currentThread().getId() + ".part");
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
         try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(part)) {
@@ -920,7 +926,11 @@ final class Recs {
         } finally {
             c.disconnect();
         }
-        if (!part.renameTo(f)) throw new IOException("couldn't save the image");
+        if (!part.renameTo(f)) {
+            //noinspection ResultOfMethodCallIgnored
+            part.delete();
+            if (!f.exists()) throw new IOException("couldn't save the image");   // else the other thread saved it first
+        }
         prune(f.getParentFile());
     }
 

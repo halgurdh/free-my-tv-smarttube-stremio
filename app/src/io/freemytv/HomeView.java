@@ -3045,6 +3045,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private void preloadCards() {
         if (cards.isEmpty()) return;
         int start = Math.max(0, cardIndex - 2), first = Math.max(0, start - 1), last = Math.min(cards.size() - 1, start + 4);
+        // What shows first: the focused card (it's the background too), then the rest on screen, then the other tabs'.
+        recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
+        for (int i = start; i <= Math.min(last, start + 3); i++) recs.backdrop(cards.get(i));
+        if (first < start) recs.backdrop(cards.get(first));
+        if (last > start + 3) recs.backdrop(cards.get(last));
         int room = recs.keep - (last - first + 1);
         for (int t = 0; t < tabKinds.length && room > 0; t++) {
             if (t == tab || "yt".equals(tabKinds[t]) || "music".equals(tabKinds[t])) continue;
@@ -3054,7 +3059,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 room--;
             }
         }
-        for (int i = first; i <= last; i++) recs.backdrop(cards.get(i));
     }
 
     /** The cards of the current tab (Explore, Movies, Shows; YouTube has rows) and the background taken from the focused one. */
