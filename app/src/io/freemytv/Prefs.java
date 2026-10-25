@@ -162,6 +162,10 @@ final class Prefs {
     static boolean sounds() { return sp().getBoolean("sounds", true); }
     static void setSounds(boolean on) { put("sounds", on); }
 
+    /** OK on the screensaver opens the title it shows, in its app; any other key only closes it. Off: any key closes it. */
+    static boolean saverWatch() { return sp().getBoolean("saverWatch", false); }
+    static void setSaverWatch(boolean on) { put("saverWatch", on); }
+
     // MARK: - Widgets and coins
 
     static boolean weather() { return sp().getBoolean("weather", true); }

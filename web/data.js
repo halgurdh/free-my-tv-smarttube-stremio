@@ -47,6 +47,8 @@ var Prefs = (function () {
     temperature: function () { return pick('temperature', CONFIG.temperature || 'auto'); },
     theme: function () { return pick('theme', CONFIG.theme || 'auto'); },
     weather: function () { return pick('weather', true); },
+    /** OK on the screensaver opens the title it shows, in its app; any other key only closes it (off by default). */
+    saverWatch: function () { return pick('saverWatch', false) === true; },
     /** The weather card's forecast: 'hours' (the next 6 hours) or 'days' (the next 5 days). */
     forecast: function () { return pick('forecast', 'hours') === 'days' ? 'days' : 'hours'; },
     quotes: function () { return pick('quotes', CONFIG.showCrypto !== false); },

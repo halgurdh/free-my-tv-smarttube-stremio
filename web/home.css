@@ -580,6 +580,7 @@ button { font: inherit; color: inherit; background: none; border: 0; padding: 0;
 #saver .clock .time { font-size: 150px; font-weight: 300; line-height: 1; letter-spacing: -0.02em; font-feature-settings: 'tnum'; }
 #saver .clock .date { margin-top: 10px; font-size: 34px; font-weight: 500; color: rgba(255, 255, 255, 0.82); }
 #saver .clock .title { margin-top: 18px; font-size: 26px; font-weight: 500; color: rgba(255, 255, 255, 0.65); }
+#saver .clock .hint { margin-top: 8px; font-size: 22px; color: rgba(255, 255, 255, 0.55); }
 
 /* MARK: - Toast */
 

@@ -36,7 +36,8 @@ import java.util.concurrent.Executors;
  *  - top right, like the iPhone lock screen: the date with the weather, the big Liquid Glass clock (the photo shows
  *    through the digits, bent at the edges; Shaders.GLASS_TEXT) and the compact prices;
  *  - bottom left, the photo's caption: the time-of-day label ("TONIGHT"), the title, and genre · runtime · service.
- * Dark scrims only where there is text, stronger where the photo is bright. Any key exits (as on Apple TV).
+ * Dark scrims only where there is text, stronger where the photo is bright. Any key exits (as on Apple TV); with Watch
+ * from the screensaver on (Prefs.saverWatch), OK first opens the title in its app, and the caption says so.
  * With your own photos on (Photos), those instead, without a caption.
  * Without photos (no TMDB key, or before the first fetch): the big clock over the night aurora.
  */
@@ -127,7 +128,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
     private long minute = -1;
     private String clock = "", date = "";
     private Paint datePaint, clockPaint, weatherPaint, weatherDim, quotePaint, stalePaint;
-    private Paint cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, metaPaint;
+    private Paint cornerDate, cornerQuote, cornerStale, cornerClock, labelPaint, metaPaint, hintPaint;
     private TextPaint titlePaint;
 
     private final Runnable tick = new Runnable() {
@@ -248,6 +249,7 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
         titlePaint = new TextPaint(Ui.text(Ui.displayMedium, 76 * k, 0xFFFFFFFF));
         titlePaint.setLetterSpacing(0.005f);
         metaPaint = Ui.text(Ui.medium, 29 * k, 0xC7FFFFFF);
+        hintPaint = Ui.text(Ui.regular, 24 * k, 0x99FFFFFF);
         metaPaint.setLetterSpacing(0.014f);
         Symbols.warmWeather(getContext(), 30 * k);   // the corner's
         Symbols.warmWeather(getContext(), 32 * k);   // under the clock
@@ -700,10 +702,29 @@ final class DreamView extends View implements Choreographer.FrameCallback, HomeD
             t.draw(c);
             c.restore();
             if (s.pick.meta != null && !s.pick.meta.isEmpty()) c.drawText(s.pick.meta, x, metaBase, metaPaint);
+            if (Prefs.saverWatch() && s.pick.pkg != null) {
+                c.drawText(Ui.trf("Press OK to watch on {app} · any other button to close", "app", Recs.serviceName(s.pick)),
+                        x, metaBase + 44 * k, hintPaint);
+            }
         } finally {
             s.caption.endRecording();
         }
         s.caption.setPosition(0, 0, w, h);
+    }
+
+    /** The title whose caption shows, if it has an app on the TV; null for your photos and the clock. */
+    private Recs.Pick watchable() {
+        Slide s = incoming != null && SystemClock.uptimeMillis() - incoming.startedAt > 1300 ? incoming : current;
+        return s == null || s.pick.photo != null || s.pick.pkg == null ? null : s.pick;
+    }
+
+    /** OK with Watch from the screensaver on: the title opens in its app, as its card does on the home screen. */
+    boolean watch() {
+        Recs.Pick p = watchable();
+        if (p == null) return false;
+        boolean opened = HomeApps.open(getContext(), HomeApps.app(p.pkg, Recs.serviceName(p), p.link), null);
+        if (!opened) AppLog.w("screensaver: couldn't open “" + p.title + "” in " + p.pkg);
+        return opened;
     }
 
     /** The caption fades out fast; the new one rises in once the photo has partly changed (like the home screen). */

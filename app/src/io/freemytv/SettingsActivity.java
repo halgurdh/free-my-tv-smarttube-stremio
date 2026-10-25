@@ -104,7 +104,8 @@ public class SettingsActivity extends Activity {
 
     @Override public boolean dispatchKeyEvent(KeyEvent event) {
         if (preview != null) {
-            // Like the real screensaver: arrows, OK or Back close it (other keys go on to the system).
+            // Like the real screensaver: arrows, OK or Back close it (other keys go on to the system); with Watch from the
+            // screensaver on, OK opens the title first.
             switch (event.getKeyCode()) {
                 case KeyEvent.KEYCODE_DPAD_UP:
                 case KeyEvent.KEYCODE_DPAD_DOWN:
@@ -113,7 +114,11 @@ public class SettingsActivity extends Activity {
                 case KeyEvent.KEYCODE_DPAD_CENTER:
                 case KeyEvent.KEYCODE_ENTER:
                 case KeyEvent.KEYCODE_BACK:
-                    if (event.getAction() == KeyEvent.ACTION_UP) closePreview();
+                    if (event.getAction() == KeyEvent.ACTION_UP) {
+                        boolean ok = event.getKeyCode() == KeyEvent.KEYCODE_DPAD_CENTER || event.getKeyCode() == KeyEvent.KEYCODE_ENTER;
+                        if (ok && Prefs.saverWatch()) preview.watch();
+                        closePreview();
+                    }
                     return true;
                 default:
                     return super.dispatchKeyEvent(event);
@@ -735,8 +740,10 @@ public class SettingsActivity extends Activity {
         // MARK: - Home Settings and Remote Buttons
 
         private static final String[] UNITS = {"auto", "C", "F"}, THEMES = {"auto", "light", "dark"};
-        /** Home Settings: language, temperature, theme, my photos, sounds, picks, weather, city, forecast, quotes, then one row per coin. */
-        private static final int PHOTOS_ROW = 3, PICKS_ROW = 5, WEATHER_ROW = 6, CITY_ROW = 7, FORECAST_ROW = 8, QUOTES_ROW = 9, COIN_ROWS = 10;
+        /** Home Settings: language, temperature, theme, my photos, sounds, picks, watch from the screensaver, weather, city,
+         *  forecast, quotes, then one row per coin. */
+        private static final int PHOTOS_ROW = 3, PICKS_ROW = 5, SAVER_ROW = 6, WEATHER_ROW = 7, CITY_ROW = 8, FORECAST_ROW = 9,
+                QUOTES_ROW = 10, COIN_ROWS = 11;
         /** Home Settings rows on screen at once (what fits above the hints at 1080p); a longer list scrolls. */
         private static final int SETTINGS_VISIBLE = 10;
 
@@ -752,6 +759,7 @@ public class SettingsActivity extends Activity {
             l.add(Ui.tr("My Photos"));
             l.add(Ui.tr("Navigation sounds"));
             l.add(Ui.tr("Picks"));
+            l.add(Ui.tr("Watch from the screensaver"));
             l.add(Ui.tr("Weather widget"));
             l.add(Ui.tr("City"));
             l.add(Ui.tr("Forecast"));
@@ -818,6 +826,7 @@ public class SettingsActivity extends Activity {
                     : Prefs.photos() ? Ui.plural("plural|one:{n} photo|other:{n} photos", photos) : Ui.tr("Off");
             v[4] = onOff(Prefs.sounds());
             v[PICKS_ROW] = "›";   // opens its own screen: Picks per tab (and the services, with Picks from)
+            v[SAVER_ROW] = onOff(Prefs.saverWatch());
             v[WEATHER_ROW] = onOff(Prefs.weather());
             v[CITY_ROW] = !cityStatus.isEmpty() ? cityStatus : Prefs.city().isEmpty() ? "—" : Prefs.city();
             v[FORECAST_ROW] = Prefs.forecast().equals("days") ? Ui.tr("Next days") : Ui.tr("Next hours");
@@ -1094,6 +1103,7 @@ public class SettingsActivity extends Activity {
                     return;
                 case 4: Prefs.setSounds(!Prefs.sounds()); break;
                 case PICKS_ROW: return;
+                case SAVER_ROW: Prefs.setSaverWatch(!Prefs.saverWatch()); break;
                 case WEATHER_ROW: Prefs.setWeather(!Prefs.weather()); break;
                 case CITY_ROW: return;
                 case FORECAST_ROW:   // both are in memory: nothing to fetch

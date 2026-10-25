@@ -709,6 +709,8 @@
         step: function (d) { cycle('theme', ['auto', 'light', 'dark'], theme, d); checkNight(); }},
       {label: tr('Picks per tab'), value: String(Prefs.cards()),
         step: function (d) { Prefs.set('cards', 3 * (1 + (Prefs.cards() / 3 - 1 + (d || 1) + 3) % 3)); renderCards(); }},   // 3, 6, 9
+      {label: tr('Watch from the screensaver'), toggle: Prefs.saverWatch(),
+        step: function () { Prefs.set('saverWatch', !Prefs.saverWatch()); }},
       {label: tr('Weather widget'), toggle: Prefs.weather(),
         step: function () { Prefs.set('weather', !Prefs.weather()); renderPanels(); }},
       {label: tr('Forecast'), value: Prefs.forecast() === 'days' ? tr('Next days') : tr('Next hours'),
@@ -1045,7 +1047,7 @@
     try { localStorage.setItem('fmtv.night', night ? 'true' : 'false'); } catch (e) {}   // for index.html, next start
   }
 
-  var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, SAVER_AFTER = 5 * 60000;
+  var saverOn = false, idleAt = Date.now(), saverIndex = 0, saverTimer = 0, saverPick = null, SAVER_AFTER = 5 * 60000;
 
   /** The screensaver's photos: picks with an app on the TV. */
   function saverPhotos() {
@@ -1055,6 +1057,7 @@
   function showSaver() {
     var photos = saverPhotos();
     saverOn = true;
+    saverPick = null;
     var s = $('saver');
     s.innerHTML = '';
     var a = el('div', 'photo', s), b = el('div', 'photo', s);
@@ -1063,6 +1066,7 @@
     el('div', 'time', clock);
     el('div', 'date', clock);
     el('div', 'title', clock);
+    var hint = el('div', 'hint', clock);
     var front = a;
     function next() {
       if (!saverOn) return;
@@ -1071,7 +1075,11 @@
       if (p) {
         back.style.backgroundImage = 'url(' + Data.image(p.backdrop, 'original') + ')';
         back.style.webkitTransform = back.style.transform = 'scale(1.0)';
-        clock.lastChild.textContent = p.title;
+        clock.children[2].textContent = p.title;
+        saverPick = p;
+        // With Watch from the screensaver on, OK opens this title's app (any other key only closes).
+        var app = Prefs.saverWatch() && Data.appFor(p.app);
+        hint.textContent = app ? trf('Press OK to watch on {app} · any other button to close', {app: app.title}) : '';
         setTimeout(function () {
           setClass(back, 'on', true);
           setClass(front, 'on', false);
@@ -1098,17 +1106,20 @@
     setClass($('saver'), 'on', false);
   }
 
-  function poke() {
+  function poke(ok) {
     idleAt = Date.now();
-    if (saverOn) { hideSaver(); return true; }
-    return false;
+    if (!saverOn) return false;
+    var app = ok && saverPick && Prefs.saverWatch() && Data.appFor(saverPick.app);
+    hideSaver();
+    if (app) launcher(app.id, app.title)();
+    return true;
   }
 
   // MARK: - Keys
 
   document.addEventListener('keydown', function (e) {
     var k = e.keyCode;
-    if (poke()) { e.preventDefault(); return; }   // the first press only wakes the screen
+    if (poke(k === TV.keys.ok)) { e.preventDefault(); return; }   // the first press only wakes the screen (or OK watches)
     if (k === TV.keys.left) move(-1, 0);
     else if (k === TV.keys.right) move(1, 0);
     else if (k === TV.keys.up) move(0, -1);

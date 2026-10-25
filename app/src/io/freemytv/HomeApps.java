@@ -529,6 +529,11 @@ final class HomeApps {
 
     /** Opens the item with the system zoom transition growing out of the card (the app starts opening right away). */
     static boolean open(Activity a, Item it, View from, int x, int y, int w, int h) {
+        return open(a, it, ActivityOptions.makeScaleUpAnimation(from, x, y, Math.max(w, 1), Math.max(h, 1)).toBundle());
+    }
+
+    /** Opens the item; `options` for the transition, or null (the screensaver has no card to grow out of). */
+    static boolean open(Context a, Item it, android.os.Bundle options) {
         Intent intent, plain = null;   // plain: the app's own home, when it won't take the title's address
         switch (it.kind) {
             case APP:
@@ -561,7 +566,7 @@ final class HomeApps {
         if (intent == null) return false;
         intent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK);
         try {
-            a.startActivity(intent, ActivityOptions.makeScaleUpAnimation(from, x, y, Math.max(w, 1), Math.max(h, 1)).toBundle());
+            a.startActivity(intent, options);
             return true;
         } catch (ActivityNotFoundException | SecurityException e) {
             AppLog.w("couldn't open " + it.label + ": " + e.getMessage());
