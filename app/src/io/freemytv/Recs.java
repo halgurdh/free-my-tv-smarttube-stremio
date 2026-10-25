@@ -280,6 +280,9 @@ final class Recs {
         String meta = p.meta == null ? "" : p.meta;
         if (p.recent) meta = meta.contains(" · ") ? meta.substring(meta.indexOf(" · ") + 3) : "";
         if (p.tag != null && meta.startsWith(p.tag + " · ")) meta = meta.substring(p.tag.length() + 3);
+        // A song's card names its app too, as a title's and a video's do ("Artist · Spotify").
+        String app = "music".equals(p.kind) ? serviceName(p) : "";
+        if (app != null && !app.isEmpty() && !meta.endsWith(app)) meta = meta.isEmpty() ? app : meta + " · " + app;
         kept.meta = meta;
         String saved;
         synchronized (recent) {
