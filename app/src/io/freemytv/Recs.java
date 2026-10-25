@@ -236,11 +236,27 @@ final class Recs {
     static final String APP = "app";
 
     /**
-     * An app was opened from the home screen: it comes first again, as an app card (with Prefs.recent on). Android
-     * doesn't tell another home screen what was watched in it, but the app opens where it was left.
+     * An app was opened from the home screen: it comes first again (with Prefs.recent on), as what was last opened in it
+     * from here, else as an app card. Android doesn't tell another home screen what was watched in it, but the app opens
+     * where it was left.
      */
     void openedApp(String pkg, String name) {
         if (!Prefs.recent() || pkg == null || pkg.equals(context.getPackageName())) return;
+        // The app was last used for something opened from here (a title, a song, a video): that stays the card, first
+        // again, with its picture. An app card only for an app with none.
+        Pick last = null;
+        synchronized (recent) {
+            for (Pick r : recent) {
+                if (pkg.equals(r.pkg) && !APP.equals(r.kind)) {
+                    last = r;
+                    break;
+                }
+            }
+        }
+        if (last != null) {
+            opened(last);
+            return;
+        }
         Pick p = new Pick();
         p.kind = APP;
         p.id = pkg.hashCode();     // Recs.key: one card per app
