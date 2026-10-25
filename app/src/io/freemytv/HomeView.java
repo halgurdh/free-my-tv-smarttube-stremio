@@ -2369,11 +2369,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 return true;
             case KeyEvent.KEYCODE_SETTINGS:
             case KeyEvent.KEYCODE_NOTIFICATION:
-                // The remote's Settings button (TCL's sends NOTIFICATION) opens TV Settings, as Hisense's gear does by
-                // default; ours stay on the gear on screen. Hisense's gear is a Remote Buttons choice (RemoteKeys); where
-                // the system takes the key first, it never gets here.
+                // The remote's Settings button (TCL's sends NOTIFICATION) opens our Settings, as the gear on screen
+                // does (this fork; upstream opens TV Settings). Hisense's gear is a Remote Buttons choice (RemoteKeys);
+                // where the system takes the key first, it never gets here.
                 if (RemoteKeys.HISENSE) return false;
-                if (down && e.getRepeatCount() == 0) HomeApps.open(activity, HomeApps.tvSettings(), this, w / 2, h / 2, 1, 1);
+                if (down && e.getRepeatCount() == 0) HomeApps.open(activity, HomeApps.settings(), this, w / 2, h / 2, 1, 1);
                 return true;
             case KeyEvent.KEYCODE_BACK:
                 if (down) {
