@@ -3276,6 +3276,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             c.drawText(TextUtils.ellipsize(p.meta, fitPaint, bw, TextUtils.TruncateAt.END).toString(), base.left, base.bottom + 80 * k, lCardMeta);
             lCardMeta.setAlpha(a);
         }
+        // A narrow card shows only its title: why it's there (Trakt's "Up next: S2 E5") goes under it, fading into the
+        // whole meta (which starts with it) as the card widens.
+        if (open < 0.98f && p.tag != null) {
+            fitPaint.set(lCardMeta);
+            int a = lCardMeta.getAlpha();
+            lCardMeta.setAlpha(Math.round(a * (1 - open)));
+            c.drawText(TextUtils.ellipsize(p.tag, fitPaint, bw, TextUtils.TruncateAt.END).toString(), base.left, base.bottom + 80 * k, lCardMeta);
+            lCardMeta.setAlpha(a);
+        }
     }
 
     /**

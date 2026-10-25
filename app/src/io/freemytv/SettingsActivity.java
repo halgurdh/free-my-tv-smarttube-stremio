@@ -740,6 +740,7 @@ public class SettingsActivity extends Activity {
             l.add("Ethereum");
             l.add("Solana");
             if (dollar()) l.add(Ui.tr("Dollar"));
+            if (Trakt.available()) l.add("Trakt");
             return l.toArray(new String[0]);
         }
 
@@ -749,6 +750,42 @@ public class SettingsActivity extends Activity {
 
         private String[] picksValues() {
             return new String[] {String.valueOf(Prefs.cards())};
+        }
+
+        /** The Trakt row (the last one), only with a Trakt API app in config.properties; else -1. */
+        private int traktRow() {
+            return Trakt.available() ? COIN_ROWS + 3 + (dollar() ? 1 : 0) : -1;
+        }
+
+        private String traktValue() {
+            Context c = getContext();
+            String code = Trakt.code();
+            if (code != null) return Ui.trf("{url}, code {code}", "url", Trakt.url(), "code", code);
+            if (Trakt.busy()) return Ui.tr("Connecting…");
+            if (Trakt.signedIn(c)) return Trakt.user(c).isEmpty() ? Ui.tr("Signed in") : Trakt.user(c);
+            String m = Trakt.message().isEmpty() ? Ui.tr("Sign in") : Trakt.message();
+            if (rowValue == null) return m;   // TalkBack can ask before the first layout
+            return TextUtils.ellipsize(m, new TextPaint(rowValue), 640 * k, TextUtils.TruncateAt.END).toString();
+        }
+
+        /** OK on the Trakt row: shows a code to sign in with, or asks before signing out. */
+        private void traktOk() {
+            Context c = getContext();
+            if (!Trakt.signedIn(c)) {
+                // TalkBack reads the row again at each step: the code as it appears, then signed in (or why not).
+                Trakt.signIn(c, () -> handler.post(() -> {
+                    invalidate();
+                    spoken.focusMoved();
+                }));
+                return;
+            }
+            String user = Trakt.user(c).isEmpty() ? "Trakt" : Trakt.user(c);
+            new AlertDialog.Builder(activity, android.R.style.Theme_DeviceDefault_Dialog_Alert)
+                    .setTitle("Trakt")
+                    .setMessage(Ui.trf("Sign out of {name}? The picks go back to TMDB's alone.", "name", user))
+                    .setPositiveButton(Ui.tr("Sign out"), (d, which) -> { Trakt.signOut(c); invalidate(); })
+                    .setNegativeButton(Ui.tr("Cancel"), null)
+                    .show();
         }
 
         private String[] settingValues() {
@@ -774,6 +811,7 @@ public class SettingsActivity extends Activity {
             v[QUOTES_ROW] = onOff(Prefs.quotes());
             // No quotes widget, nowhere to show prices: the coins read as off (and stay locked) until it is back on.
             for (int i = COIN_ROWS; i < v.length; i++) v[i] = onOff(Prefs.quotes() && Prefs.coin(i - COIN_ROWS));
+            if (traktRow() >= 0) v[traktRow()] = traktValue();
             return v;
         }
 
@@ -819,7 +857,7 @@ public class SettingsActivity extends Activity {
                 whyScroll = pickScroll;
                 for (int r = 0; r < n; r++) {
                     String need = need(r);
-                    whyRows[r] = screen == HOME_SETTINGS && pickScroll + r >= COIN_ROWS && !Prefs.quotes()
+                    whyRows[r] = screen == HOME_SETTINGS && pickScroll + r >= COIN_ROWS && pickScroll + r != traktRow() && !Prefs.quotes()
                             ? Ui.tr("Turn on the Quotes widget to pick its coins.")
                             : need == null ? null : Capabilities.missing(getContext(), need);
                 }
@@ -1028,6 +1066,7 @@ public class SettingsActivity extends Activity {
                 return;
             }
             int row = pickScroll + focus;
+            if (row == traktRow()) return;   // OK signs in or out; the arrows change nothing
             switch (row) {
                 case 0: break;   // OK opens the language picker.
                 case 1: {
@@ -1403,6 +1442,10 @@ public class SettingsActivity extends Activity {
                 activatePower();
             } else if (screen == PICKS) {
                 adjust(1);
+                invalidate();
+                return;
+            } else if (screen == HOME_SETTINGS && pickScroll + focus == traktRow()) {
+                traktOk();
                 invalidate();
                 return;
             } else if (screen == HOME_SETTINGS) {
