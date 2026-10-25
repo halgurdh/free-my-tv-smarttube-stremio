@@ -3048,27 +3048,24 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /**
      * The images around the focused card: the four on screen (the row starts at cardIndex - 2) and one past each edge,
-     * so the next press finds its card ready; with room left in what Recs keeps, the first card of each other tab too
-     * (switching tabs never flashes the gradient). The rest load as the row moves, so the images in memory don't grow
-     * with Picks per tab.
+     * so the next press finds its card ready, and the first three of each other tab, so switching tabs finds its cards
+     * and background ready. The rest load as the row moves, so the images in memory don't grow with Picks per tab.
      */
     private void preloadCards() {
         if (cards.isEmpty()) return;
         int start = Math.max(0, cardIndex - 2), first = Math.max(0, start - 1), last = Math.min(cards.size() - 1, start + 4);
-        // What shows first: the focused card (it's the background too), then the rest on screen, then the other tabs'.
+        // What shows first: the focused card (it's the background too), then the rest on screen, then the first three
+        // of the other tabs (what a tab shows when it opens: switching tabs never shows gray cards filling in), then
+        // one past each edge. At most 12 (Recs.keep).
         recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
         for (int i = start; i <= Math.min(last, start + 3); i++) recs.backdrop(cards.get(i));
-        if (first < start) recs.backdrop(cards.get(first));
-        if (last > start + 3) recs.backdrop(cards.get(last));
-        int room = recs.keep - (last - first + 1);
-        for (int t = 0; t < tabKinds.length && room > 0; t++) {
+        for (int t = 0; t < tabKinds.length; t++) {
             if (t == tab || "yt".equals(tabKinds[t]) || "music".equals(tabKinds[t])) continue;
             List<Recs.Pick> other = recs.now(tabKinds[t]);
-            if (!other.isEmpty()) {
-                recs.backdrop(other.get(0));
-                room--;
-            }
+            for (int i = 0; i < Math.min(3, other.size()); i++) recs.backdrop(other.get(i));
         }
+        if (first < start) recs.backdrop(cards.get(first));
+        if (last > start + 3) recs.backdrop(cards.get(last));
     }
 
     /** The cards of the current tab (Explore, Movies, Shows; YouTube has rows) and the background taken from the focused one. */

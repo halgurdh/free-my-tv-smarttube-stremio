@@ -183,10 +183,10 @@ final class Recs {
     private Recs(Context c) {
         context = c;
         cache = c.getSharedPreferences("recs", Context.MODE_PRIVATE);
-        // Backgrounds kept ready (~4 MB each with the poster): the cards on screen and one past each edge
-        // (HomeView.preloadCards), and with room, each other tab's first. With little memory, only the row around the
-        // focus: the next card loads as the row moves.
-        keep = smallMemory(c) ? 6 : 13;
+        // Backgrounds kept ready (~4 MB each with the poster): the cards on screen, one past each edge and the first three
+        // of each other tab (HomeView.preloadCards: 12 at most), whatever Picks per tab is. Above 3 GB, a few more stay
+        // as the row moves, so going back along it finds them.
+        keep = smallMemory(c) ? 12 : 16;
         if (cache.getInt("version", 0) != CACHE_VERSION) cache.edit().clear().putInt("version", CACHE_VERSION).apply();
         try {
             String saved = cache.getString("picks", null);
