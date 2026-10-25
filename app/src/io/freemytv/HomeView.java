@@ -2240,7 +2240,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (running) reloadSoon();
     }
 
-    // MARK: - Keys: only the arrows, OK and Back (system keys pass through to the system)
+    // MARK: - Keys: only the arrows, OK, Back and Settings (system keys pass through to the system)
 
     boolean onKey(KeyEvent e) {
         wake();
@@ -2290,6 +2290,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     if (okDown && !okHeld && !e.isCanceled() && spoken.keyClick()) activate();
                     okDown = okHeld = false;
                 }
+                return true;
+            case KeyEvent.KEYCODE_SETTINGS:
+            case KeyEvent.KEYCODE_NOTIFICATION:
+                // The remote's Settings button (TCL's sends NOTIFICATION) opens our Settings, as the gear on screen
+                // does. Hisense's gear is a Remote Buttons choice (RemoteKeys); where the system takes the key first,
+                // it never gets here.
+                if (RemoteKeys.HISENSE) return false;
+                if (down && e.getRepeatCount() == 0) HomeApps.open(activity, HomeApps.settings(), this, w / 2, h / 2, 1, 1);
                 return true;
             case KeyEvent.KEYCODE_BACK:
                 if (down) {
