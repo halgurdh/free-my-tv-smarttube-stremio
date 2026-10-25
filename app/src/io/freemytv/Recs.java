@@ -240,6 +240,7 @@ final class Recs {
             }
         }
         cache.edit().putString("recent", saved).apply();
+        AppLog.w("recently opened: " + p.title + " (" + p.pkg + ")");
         notifyListeners();
     }
 
