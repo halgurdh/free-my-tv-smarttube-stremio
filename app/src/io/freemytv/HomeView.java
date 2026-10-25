@@ -2496,6 +2496,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
         else if (pick != null) recs.opened(pick);
+        else if (it.kind == HomeApps.APP) recs.openedApp(it.pkg, it.label);
     }
 
     // MARK: - Holding OK: All Apps puts the app on the shelf or takes it off; on the shelf, the app is lifted to move
@@ -3468,6 +3469,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         c.drawText(weatherLine, x + sw + 16 * k, base, lWeather);
     }
 
+    private final RectF appCell = new RectF();
+
+    /** The shelf's or All Apps' item for this package (its TV art), or null. */
+    private HomeApps.Item appItem(String pkg) {
+        for (int i = 0; i < shelf.size(); i++) if (pkg.equals(shelf.get(i).pkg)) return shelf.get(i);
+        for (int i = 0; i < others.size(); i++) if (pkg.equals(others.get(i).pkg)) return others.get(i);
+        return null;
+    }
+
     /**
      * Recommendation card: the title's photo (already at the focused card size, so it stays sharp), rounded corners and
      * a soft shadow; when focused, it grows 5%, rises and lights up its border. Below it, the title (and on the large
@@ -3506,6 +3516,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             c.drawRoundRect(cell, r, r, fill);
             if (p != null && "yt-setup".equals(p.kind)) {   // the YouTube tab's "choose your categories" card
                 Symbols.draw(getContext(), c, "settings", cell.centerX(), cell.centerY(), 96 * k * s, tone(L_DIM, 0xB3FFFFFF));
+            }
+            HomeApps.Item app = p != null && Recs.APP.equals(p.kind) ? appItem(p.pkg) : null;
+            if (app != null && app.tile != null) {   // a recently opened app: its TV art, in the middle of the card
+                float aw = Math.min(cell.width() * 0.8f, cell.height() * 0.6f * 16 / 9), ah = aw * 9 / 16;
+                appCell.set(cell.centerX() - aw / 2, cell.centerY() - ah / 2, cell.centerX() + aw / 2, cell.centerY() + ah / 2);
+                roundImage(c, app.tile, app.tileShader, appCell, 12 * k * s);
             }
         }
         if (f > 0.01f) {

@@ -52,6 +52,7 @@ final class Recs {
         String tag;             // Trakt: "Up next: S2 E5", "On your watchlist"…, first in the meta; else null
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
         boolean recent;         // a copy of one opened from the picks (Prefs.recent), "Recently opened" first in the meta
+                                // (kind APP: an app opened from the home screen; title = its name, no image)
         boolean detailed;
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
@@ -215,6 +216,24 @@ final class Recs {
 
     /** The most kept: more than a tab shows, so one whose app is gone leaves room. */
     private static final int RECENT_MAX = 10;
+    /** Pick.kind of an app opened from the home screen (the shelf, All Apps): its card opens the app again. */
+    static final String APP = "app";
+
+    /**
+     * An app was opened from the home screen: it comes first again, as an app card (with Prefs.recent on). Android
+     * doesn't tell another home screen what was watched in it, but the app opens where it was left.
+     */
+    void openedApp(String pkg, String name) {
+        if (!Prefs.recent() || pkg == null || pkg.equals(context.getPackageName())) return;
+        Pick p = new Pick();
+        p.kind = APP;
+        p.id = pkg.hashCode();     // Recs.key: one card per app
+        p.title = name;
+        p.pkg = pkg;
+        p.meta = "";
+        p.detailed = true;
+        opened(p);
+    }
     private final List<Pick> recent = new ArrayList<>();     // newest first; guarded by itself
 
     /** A pick was opened from a card: it comes first again (with Prefs.recent on; off, nothing is kept). */
@@ -251,6 +270,7 @@ final class Recs {
         String tag = Ui.tr("Recently opened");
         synchronized (recent) {
             for (Pick p : recent) {
+                // Apps only on Explore (kind null), next to the titles; Movies and Shows keep to their kind.
                 if ((kind != null && !kind.equals(p.kind)) || !have.computeIfAbsent(p.pkg, this::installed)) continue;
                 Pick shown = copy(p);
                 shown.recent = true;
@@ -371,6 +391,7 @@ final class Recs {
 
     /** Name of the service the pick is on ("Netflix"), or empty. */
     static String serviceName(Pick p) {
+        if (p != null && APP.equals(p.kind)) return p.title;
         return p == null || p.app == null ? "" : SERVICE_NAME.get(p.app);
     }
 
@@ -542,7 +563,7 @@ final class Recs {
         List<Pick> out = new ArrayList<>();
         java.util.Set<String> seen = new java.util.HashSet<>();
         for (String kind : new String[] {null, "movie", "tv"}) {
-            for (Pick p : now(kind)) if (seen.add(key(p))) out.add(p);
+            for (Pick p : now(kind)) if (!APP.equals(p.kind) && seen.add(key(p))) out.add(p);   // apps have no title to fetch
         }
         return out;
     }
@@ -1129,7 +1150,7 @@ final class Recs {
             p.id = o.optInt("id");
             p.kind = o.optString("kind");
             p.title = o.optString("title");
-            p.backdrop = o.optString("backdrop");
+            p.backdrop = o.optString("backdrop").isEmpty() ? null : o.optString("backdrop");   // an app card has none
             p.poster = o.optString("poster");
             p.link = o.optString("link").isEmpty() ? null : o.optString("link");
             p.meta = o.optString("meta");
