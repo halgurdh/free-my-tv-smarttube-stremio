@@ -38,7 +38,7 @@ import java.util.concurrent.Executors;
 /**
  * Home screen picks ("This morning / afternoon / tonight"): what's trending this week plus recent releases, only from
  * the streaming apps installed on the TV (Netflix, Prime Video, Disney+, Max, Apple TV, Okko, Hulu, Paramount+, Peacock,
- * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). 3 per hour, or up to 6 (Home Settings).
+ * Globoplay...), via TMDB (an open movie database that knows what streams where in each country). 3 per hour, or 6 or 9 (Home Settings).
  * "Watch" opens the service's app.
  *
  * Each person uses their own free TMDB key (config.properties "tmdb_key", built into the app). It never goes to the log.
@@ -59,8 +59,8 @@ final class Recs {
 
     interface Listener { void onRecs(); }
 
-    /** The most cards per tab and hour (Prefs.cards() picks how many, 3 by default); the home screen shows 3 at a time and scrolls. */
-    static final int MAX_CARDS = 6;   // also the videos in each YouTube row
+    /** The most cards per tab and hour (Prefs.cards(): 3, 6 or 9, 3 by default); the home screen shows 3 at a time and scrolls. */
+    static final int MAX_CARDS = 9;   // also the videos in each YouTube row
 
     private static final String API = "https://api.themoviedb.org/3";
     /** The backdrops: on a 720p UI, TMDB's 1280-wide copy shows the same and is lighter to download and decode. */
@@ -165,8 +165,15 @@ final class Recs {
     }
 
     private final Context context;
+    /** How many backgrounds stay built in memory (HomeView preloads within it). */
+    final int keep;
     private final SharedPreferences cache;
     private final ExecutorService io = Executors.newSingleThreadExecutor();
+    /**
+     * The images get their own thread: after a night in standby the list is stale, and its dozens of TMDB and Trakt
+     * requests (each waiting up to 8 s while the Wi-Fi comes back) held up the cards on screen, already on disk.
+     */
+    private final ExecutorService decode = Executors.newSingleThreadExecutor();
     private final Handler main = new Handler(Looper.getMainLooper());
     private final List<Listener> listeners = new ArrayList<>();
     private final Map<String, Poster> posters = new LinkedHashMap<>();   // narrow-card portraits, same keys as images
@@ -177,7 +184,7 @@ final class Recs {
     private volatile long listAt;
     private volatile boolean fetching;
     private volatile String error = "";
-    private volatile boolean light;     // light design: builds only the cards (all three tabs' cards fit in memory)
+    private volatile boolean light;     // light design: builds only the cards (those around the focus, up to keep)
     private volatile long failedAt, keyStamp, linkRetryAt;
     private volatile String listLanguage = "";   // language used for the saved titles, genres and texts
     private volatile String traktActivity = "";  // Trakt's last change when the picks were fetched
@@ -186,6 +193,10 @@ final class Recs {
     private Recs(Context c) {
         context = c;
         cache = c.getSharedPreferences("recs", Context.MODE_PRIVATE);
+        // Backgrounds kept ready (~4 MB each with the poster): the cards on screen, one past each edge and the first three
+        // of each other tab (HomeView.preloadCards: 12 at most), whatever Picks per tab is. Above 3 GB, a few more stay
+        // as the row moves, so going back along it finds them.
+        keep = smallMemory(c) ? 12 : 16;
         if (cache.getInt("version", 0) != CACHE_VERSION) cache.edit().clear().putInt("version", CACHE_VERSION).apply();
         try {
             String saved = cache.getString("picks", null);
@@ -197,6 +208,14 @@ final class Recs {
             traktActivity = cache.getString("traktActivity", "");
         } catch (Exception ignored) {
         }
+    }
+
+    /** Under 3 GB: most TVs have 1.5 to 2.5, and Android flags few of them as low on memory. */
+    private static boolean smallMemory(Context c) {
+        android.app.ActivityManager am = (android.app.ActivityManager) c.getSystemService(Context.ACTIVITY_SERVICE);
+        android.app.ActivityManager.MemoryInfo mem = new android.app.ActivityManager.MemoryInfo();
+        am.getMemoryInfo(mem);
+        return am.isLowRamDevice() || mem.totalMem < 3L << 30;
     }
 
     void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); }
@@ -301,7 +320,7 @@ final class Recs {
             if (b != null) return b;
             if (!pending.add(key)) return null;
         }
-        io.execute(() -> {
+        decode.execute(() -> {
             try {
                 loadImage(p);
             } finally {
@@ -932,7 +951,8 @@ final class Recs {
     private void fetchFile(File f, HttpURLConnection c) throws IOException {
         //noinspection ResultOfMethodCallIgnored
         f.getParentFile().mkdirs();
-        File part = new File(f.getPath() + ".part");
+        // One per thread: the list's thread and the images' one may download the same file at once.
+        File part = new File(f.getPath() + "." + Thread.currentThread().getId() + ".part");
         c.setConnectTimeout(8000);
         c.setReadTimeout(20000);
         try (InputStream in = c.getInputStream(); FileOutputStream out = new FileOutputStream(part)) {
@@ -946,7 +966,11 @@ final class Recs {
         } finally {
             c.disconnect();
         }
-        if (!part.renameTo(f)) throw new IOException("couldn't save the image");
+        if (!part.renameTo(f)) {
+            //noinspection ResultOfMethodCallIgnored
+            part.delete();
+            if (!f.exists()) throw new IOException("couldn't save the image");   // else the other thread saved it first
+        }
         prune(f.getParentFile());
     }
 
@@ -974,7 +998,7 @@ final class Recs {
             synchronized (images) {
                 images.put(p.backdrop, backdrop);
                 if (poster != null) posters.put(p.backdrop, poster);
-                while (images.size() > (forLight ? Prefs.cards() + 7 : 4)) images.remove(images.keySet().iterator().next());
+                while (images.size() > (forLight ? keep : 4)) images.remove(images.keySet().iterator().next());
                 posters.keySet().retainAll(images.keySet());
             }
             notifyListeners();

@@ -2979,6 +2979,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 if (rowsMode()) {
                     ytCol[ytRow] = i;
                     syncRow(false);
+                } else {
+                    followCard();
                 }
                 break;
             case Z_SHELF:
@@ -3121,7 +3123,36 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         layoutLight();
     }
 
-    /** The cards of the current tab (Explore, Movies, Shows; YouTube has rows) and the background taken from the first one. */
+    /** The background follows the focused card (the wide one). */
+    private void followCard() {
+        preloadCards();
+        Backdrop b = cardIndex < cards.size() ? recs.backdrop(cards.get(cardIndex)) : null;
+        if (b != null) showBackdrop(b);
+    }
+
+    /**
+     * The images around the focused card: the four on screen (the row starts at cardIndex - 2) and one past each edge,
+     * so the next press finds its card ready, and the first three of each other tab, so switching tabs finds its cards
+     * and background ready. The rest load as the row moves, so the images in memory don't grow with Picks per tab.
+     */
+    private void preloadCards() {
+        if (cards.isEmpty()) return;
+        int start = Math.max(0, cardIndex - 2), first = Math.max(0, start - 1), last = Math.min(cards.size() - 1, start + 4);
+        // What shows first: the focused card (it's the background too), then the rest on screen, then the first three
+        // of the other tabs (what a tab shows when it opens: switching tabs never shows gray cards filling in), then
+        // one past each edge. At most 12 (Recs.keep).
+        recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
+        for (int i = start; i <= Math.min(last, start + 3); i++) recs.backdrop(cards.get(i));
+        for (int t = 0; t < tabKinds.length; t++) {
+            if (t == tab || "yt".equals(tabKinds[t]) || "music".equals(tabKinds[t])) continue;   // their rows load as focused
+            List<Recs.Pick> other = recs.now(tabKinds[t]);
+            for (int i = 0; i < Math.min(3, other.size()); i++) recs.backdrop(other.get(i));
+        }
+        if (first < start) recs.backdrop(cards.get(first));
+        if (last > start + 3) recs.backdrop(cards.get(last));
+    }
+
+    /** The cards of the current tab (Explore, Movies, Shows; YouTube has rows) and the background taken from the focused one. */
     private void updateCards() {
         cardSlots = Prefs.cards();
         updateTabs();
@@ -3136,17 +3167,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (zone == Z_CARDS && list.isEmpty()) zone = Z_SHELF;
             retarget(false);   // the wide card and the scroll follow the clamped index, whatever has the focus
         }
-        // This tab's cards, then the first three of the others (what shows at first): switching tabs is quick, and
-        // the images stay under Recs's cap in memory. The YouTube tab's backgrounds load as its rows are focused.
-        for (Recs.Pick p : list) recs.backdrop(p);
-        for (int t = 0; t < tabKinds.length; t++) {
-            if (t == tab || "yt".equals(tabKinds[t]) || "music".equals(tabKinds[t])) continue;
-            List<Recs.Pick> other = recs.now(tabKinds[t]);
-            for (int i = 0; i < Math.min(3, other.size()); i++) recs.backdrop(other.get(i));
-        }
-        // Picks bring their own background; without them (no TMDB key), your photo if there is one.
+        preloadCards();
+        // Picks bring their own background, the focused card's; without them (no TMDB key), your photo if there is one.
         boolean own = !picksOn() && Photos.on(getContext());
-        Backdrop b = own ? Photos.backdrop(getContext(), ownReady) : cards.isEmpty() ? null : recs.backdrop(cards.get(0));
+        Backdrop b = own ? Photos.backdrop(getContext(), ownReady)
+                : cards.isEmpty() ? null : recs.backdrop(cards.get(Math.min(cardIndex, cards.size() - 1)));
         if (b != null || (cards.isEmpty() && !own)) showBackdrop(b);
         heroDirty = true;
         spoken.focusMoved();    // new picks under the focused card
@@ -3713,6 +3738,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 } else {
                     zone = Z_CARDS;
                     cardIndex = nearest(cardRects, cards.size(), shelf.isEmpty() ? w / 2f : tileRects[shelfIndex].centerX());
+                    followCard();
                 }
                 break;
             case Z_CARDS:
@@ -3720,6 +3746,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     int next = Math.max(0, Math.min(cards.size() - 1, cardIndex + dx));
                     if (next == cardIndex) return true;
                     cardIndex = next;
+                    followCard();
                 } else if (dy < 0) {
                     zone = Z_TOP;
                     topIndex = tab;     // as on Apple TV: moving up to the tabs focuses the selected tab
@@ -3744,6 +3771,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     } else {
                         zone = Z_CARDS;
                         cardIndex = nearest(cardRects, cards.size(), topRects[topIndex].centerX());
+                        followCard();
                     }
                 } else if (topIndex < B0 && !lightButtons.isEmpty()) {
                     topIndex = B0;   // up from the tabs reaches the corner buttons without walking the row
