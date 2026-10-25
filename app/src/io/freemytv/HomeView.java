@@ -161,6 +161,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     private static final int YT_ROWS = 16, YT_VISIBLE = 5;
     private List<YouTube.Row> ytRows = new ArrayList<>();
     private final List<String[]> ytTitles = new ArrayList<>();
+    // The same titles whole, and how wide: a focused one that doesn't fit scrolls (tickTitle).
+    private final List<String[]> ytFull = new ArrayList<>();
+    private final List<float[]> ytFullW = new ArrayList<>();
+    /** The focused title's scroll: which card, since when it's focused, and how far it has moved (px; -1: not moving). */
+    private int titleRow = -1, titleCol = -1;
+    private long titleSince;
+    private float titleShift = -1;
+    private final Runnable titleWake = this::wake;
     private int ytRow;
     private final int[] ytCol = new int[YT_ROWS];
     private final Spring ytScroll = new Spring(0.4f, 0.9f, 0);
@@ -747,6 +755,8 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean heroFading = tickHeroFade(up);
         boolean bgFading = tickBackgroundFade(up);
         boolean nightMoving = tickNight(up);
+        boolean titleMoving = tickTitle(up);
+        heroMoving |= titleMoving;
 
         if (drawerMoving || sheetMoving || motionDirty) updateMotion();
         // Opening and closing the drawer only moves the cached layers: redrawing the glass on every frame made the TV
@@ -774,7 +784,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
         // Busy: something is moving, or the sheet or the drawer is open.
         boolean busy = tilesMoving || statusMoving || heroMoving || drawerItemsMoving || gridMoving || drawerMoving
-                || sheetMoving || toastFading || heroFading || bgFading || nightMoving || sheetOpen || sheet.value > 0.001f
+                || sheetMoving || toastFading || heroFading || bgFading || nightMoving || titleMoving || sheetOpen || sheet.value > 0.001f
                 || drawerOpen || drawer.value > 0.001f || toast != null || !toasts.isEmpty();
         idle = !busy;
         if (busy) Choreographer.getInstance().postFrameCallback(this);
@@ -3206,15 +3216,23 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             ytRows = rows;
             // The titles under the cards, shortened once here (not on every frame).
             ytTitles.clear();
+            ytFull.clear();
+            ytFullW.clear();
+            titleRow = -1;
             fitPaint.set(lCardMeta);
             for (YouTube.Row row : rows) {
-                String[] t = new String[row.picks.size()];
+                String[] t = new String[row.picks.size()], full = new String[t.length];
+                float[] fullW = new float[t.length];
                 for (int i = 0; i < t.length; i++) {
                     Recs.Pick p = row.picks.get(i);
                     String s = p.title == null ? "" : "music".equals(p.kind) ? p.title + " · " + p.meta : p.title;
                     t[i] = TextUtils.ellipsize(s, fitPaint, YT_CARD_W * k, TextUtils.TruncateAt.END).toString();
+                    full[i] = s;
+                    fullW[i] = fitPaint.measureText(s);
                 }
                 ytTitles.add(t);
+                ytFull.add(full);
+                ytFullW.add(fullW);
             }
             ytRow = Math.max(0, Math.min(ytRow, Math.min(YT_ROWS, rows.size()) - 1));
             for (int r = 0; r < YT_ROWS; r++) ytCol[r] = r < rows.size() ? Math.max(0, Math.min(ytCol[r], rows.get(r).picks.size() - 1)) : 0;
@@ -3307,6 +3325,47 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return true;
     }
 
+    /** The focused title rests this long, scrolls at TITLE_SPEED to its end, rests, and starts again. */
+    private static final long TITLE_WAIT = 1500, TITLE_HOLD = 2000;
+    private static final float TITLE_SPEED = 70;
+
+    /**
+     * The focused row card's title, when it's wider than the card: moves it along (titleShift) and says whether it's
+     * moving now. While it rests at either end, nothing is redrawn: titleWake brings the frames back when it moves on.
+     */
+    private boolean tickTitle(long up) {
+        int r = rowsMode() && zone == Z_CARDS ? ytRow : -1, col = r >= 0 ? ytCol[r] : -1;
+        if (r != titleRow || col != titleCol) {
+            boolean was = titleShift >= 0;
+            titleRow = r;
+            titleCol = col;
+            titleSince = up;
+            titleShift = -1;
+            handler.removeCallbacks(titleWake);
+            if (was) heroDirty = true;
+        }
+        if (r < 0 || r >= ytFullW.size() || col >= ytFullW.get(r).length) return false;
+        float over = ytFullW.get(r)[col] - YT_CARD_W * k;
+        if (over <= 0) return false;
+        long travel = (long) (over / (TITLE_SPEED * k) * 1000), t = (up - titleSince) % (TITLE_WAIT + travel + TITLE_HOLD);
+        if (t < TITLE_WAIT) {
+            if (titleShift != -1) heroDirty = true;
+            titleShift = -1;
+            handler.removeCallbacks(titleWake);
+            handler.postDelayed(titleWake, TITLE_WAIT - t);
+            return false;
+        }
+        if (t >= TITLE_WAIT + travel) {
+            if (titleShift != over) heroDirty = true;
+            titleShift = over;
+            handler.removeCallbacks(titleWake);
+            handler.postDelayed(titleWake, TITLE_WAIT + travel + TITLE_HOLD - t);
+            return false;
+        }
+        titleShift = over * (t - TITLE_WAIT) / travel;
+        return true;
+    }
+
     /**
      * The rows, below the tabs and above the shelf: each category's name, then its videos (YouTube's thumbnails, gray
      * until they arrive). The focused card grows, rises and gets the shadow and a light rim; the others have none
@@ -3368,7 +3427,15 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 if (titles != null && i < titles.length) {
                     int color = lCardMeta.getColor();
                     if (focused) lCardMeta.setColor(lCardTitle.getColor());
-                    c.drawText(titles[i], ytCard.left, ytCard.bottom + 34 * k, lCardMeta);
+                    if (focused && titleShift >= 0 && r == titleRow && i == titleCol) {
+                        // Whole and moving, inside the card's width (the rest shows as it passes).
+                        c.save();
+                        c.clipRect(ytCard.left, ytCard.bottom, ytCard.right, ytCard.bottom + 48 * k);
+                        c.drawText(ytFull.get(r)[i], ytCard.left - titleShift, ytCard.bottom + 34 * k, lCardMeta);
+                        c.restore();
+                    } else {
+                        c.drawText(titles[i], ytCard.left, ytCard.bottom + 34 * k, lCardMeta);
+                    }
                     lCardMeta.setColor(color);
                 }
             }
