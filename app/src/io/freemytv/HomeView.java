@@ -142,6 +142,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     // picked) and the round buttons at the top right (from B0, up to HomeApps.MAX_TOP); the cards
     private static final int B0 = 5;
     private int tab, topIndex, cardIndex;
+    private boolean toRecent;   // Home pressed with Recently opened on: its card takes the focus once it's there
     private int widgetIndex;    // with TalkBack on, the drawer's weather (0) or quotes (1) card can take the focus
     private List<Recs.Pick> cards = new ArrayList<>();
     private String[] tabKinds = {}, tabNames = {};
@@ -532,6 +533,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         if (keptAt != 0 && now - keptAt < BURST_MS) return;
         cancelReorder(!animated);
+        toRecent = false;
         zone = Z_SHELF;
         shelfIndex = 0;
         sheetOpen = false;
@@ -553,6 +555,23 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         java.util.Arrays.fill(ytCol, 0);
         if (rowsMode()) syncRow(!animated);
         retarget(!animated);
+        motionDirty = true;
+    }
+
+    /** The Home button: with Recently opened on, back to its card (Explore's first), else to the first app. */
+    void home() {
+        reset(true);
+        toRecent = Prefs.recent();
+        focusRecent();
+    }
+
+    /** After Home, the Recently opened card gets the focus, also when it comes in a moment later (a reload). */
+    private void focusRecent() {
+        if (!toRecent || tab != 0 || cards.isEmpty() || !cards.get(0).recent) return;
+        toRecent = false;
+        zone = Z_CARDS;
+        cardIndex = 0;
+        retarget(false);
         motionDirty = true;
     }
 
@@ -2227,6 +2246,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         wake();
         boolean down = e.getAction() == KeyEvent.ACTION_DOWN;
         if (reordering) return reorderKey(e, down);
+        if (down) toRecent = false;     // a key pressed meanwhile: the focus stays where it went
         int code = e.getKeyCode();
         if (down && code != KeyEvent.KEYCODE_DPAD_CENTER && code != KeyEvent.KEYCODE_ENTER
                 && code != KeyEvent.KEYCODE_NUMPAD_ENTER) {
@@ -3086,6 +3106,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             cards = list;
             cardIndex = Math.min(cardIndex, Math.max(0, list.size() - 1));
             if (zone == Z_CARDS && list.isEmpty()) zone = Z_SHELF;
+            focusRecent();
             retarget(false);   // the wide card and the scroll follow the clamped index, whatever has the focus
         }
         preloadCards();
