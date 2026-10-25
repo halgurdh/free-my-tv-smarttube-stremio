@@ -364,8 +364,8 @@ final class Recs {
         int cards = Prefs.cards();
         java.util.Set<String> seen = new java.util.HashSet<>();
         int few = Math.max(1, cards * 2 / 5);
-        // What was opened last from here comes first (Prefs.recent; titles or apps), up to 2 in 5 cards; then Trakt's.
-        take(out, seen, recent(kind, have), 0, few);
+        // What was opened last from here is the first card (Prefs.recent; a title or an app), only that one; then Trakt's.
+        take(out, seen, recent(kind, have), 0, 1);
         take(out, seen, progress, 0, out.size() + few);
         take(out, seen, liked, hour * cards, Math.max(2, cards * 3 / 5));
         take(out, seen, list, hour * cards, cards);
