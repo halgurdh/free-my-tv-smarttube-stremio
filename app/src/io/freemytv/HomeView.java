@@ -3522,6 +3522,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 float aw = Math.min(cell.width() * 0.8f, cell.height() * 0.6f * 16 / 9), ah = aw * 9 / 16;
                 appCell.set(cell.centerX() - aw / 2, cell.centerY() - ah / 2, cell.centerX() + aw / 2, cell.centerY() + ah / 2);
                 roundImage(c, app.tile, app.tileShader, appCell, 12 * k * s);
+            } else if (app != null && app.logo != null) {   // one of the shelf's own apps: its logo, sized to the card
+                Bitmap logo = tone(1f, 0f) > 0.5f && app.logoDark != null ? app.logoDark : app.logo;
+                float fit = Math.min(cell.width() * 0.4f / logo.getWidth(), cell.height() * 0.3f / logo.getHeight());
+                float lw = logo.getWidth() * fit, lh = logo.getHeight() * fit;
+                appCell.set(cell.centerX() - lw / 2, cell.centerY() - lh / 2, cell.centerX() + lw / 2, cell.centerY() + lh / 2);
+                c.drawBitmap(logo, null, appCell, bitmapPaint);
             }
         }
         if (f > 0.01f) {
