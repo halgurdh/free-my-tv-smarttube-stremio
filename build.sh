@@ -55,6 +55,7 @@ ASSIST=false; [ "$(prop disable_assistant false)" = "true" ] && ASSIST=true
 CRYPTO=false; [ "$(prop show_crypto true)" = "true" ] && CRYPTO=true
 ANIMATION=false; [ "$(prop hide_animation false)" = "true" ] && ANIMATION=true
 SAVER=true; [ "$(prop screensaver true)" = "false" ] && SAVER=false
+STREMIO=false; [ "$(prop open_in_stremio false)" = "true" ] && STREMIO=true
 
 rm -rf out && mkdir -p out/gen/io/freemytv out/classes
 cat > out/gen/io/freemytv/Config.java <<EOF
@@ -82,6 +83,7 @@ final class Config {
     static final boolean HIDE_ANIMATION = $ANIMATION;
     static final boolean SCREENSAVER = $SAVER;   // false: the TV keeps its own
     static final String YOUTUBE_CHANNELS = "$(prop youtube_channels '')";
+    static final boolean OPEN_IN_STREMIO = $STREMIO;
 }
 EOF
 
