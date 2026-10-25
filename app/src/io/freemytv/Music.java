@@ -51,7 +51,8 @@ final class Music {
     };
     static final int MAX_GENRES = 8;
     private static final String API = "https://api.deezer.com";
-    private static final long EVERY = 3600_000L;
+    private static final long EVERY = 24 * 3600_000L;
+    private static final int NEW_DAY_HOUR = 5;     // the songs change at 5 am, the TV's time
 
     private static Music instance;
 
@@ -200,12 +201,12 @@ final class Music {
         lastUntil = android.os.SystemClock.elapsedRealtime() + seconds * 1000L;
     }
 
-    /** Fetches the picked genres' charts once an hour (after a failure, not for 10 minutes); `done` runs when there's news. */
+    /** Fetches the picked genres' songs once a day at 5 am (after a failure, not for 10 minutes); `done` runs when there's news. */
     void refreshIfStale(Runnable done) {
         if (fetching || !on()) return;
         List<String> picked = Prefs.musicGenres();
-        // A new hour is news too: each hour shows other songs (hour()), so they come on the hour.
-        String key = "songs|" + hour() + "|" + String.join(",", picked) + "|" + Ui.language;
+        // A new day is news too: each day shows other songs (day()), so they come at 5 am.
+        String key = "songs|" + day() + "|" + String.join(",", picked) + "|" + Ui.language;
         long now = System.currentTimeMillis();
         boolean changed = !key.equals(fetchedFor);
         if (!changed && now - fetchedAt < EVERY && now >= fetchedAt) return;
@@ -267,7 +268,7 @@ final class Music {
                 break;
             }
         }
-        // This hour's 9: a stretch of the playlist picked at random each hour (only 9 songs are fetched).
+        // Today's 9: a stretch of the playlist picked at random each day (only 9 songs are fetched).
         int size = Math.max(1, best.optInt("nb_tracks", Recs.MAX_CARDS));
         int start = shuffle(words).nextInt(size);
         String songs = "/playlist/" + best.optLong("id") + "/tracks?limit=";
@@ -280,14 +281,18 @@ final class Music {
     }
 
     /**
-     * A chart genre's 9: its top 3 always, then 6 from a stretch of its top 50 picked at random each hour. Two small
-     * requests, and still this week's songs.
+     * A chart genre's 9: picked at random each day from its top 50, in chart order. The first cards change too (a fixed
+     * top 3 looked the same day after day), and they're still this week's songs.
      */
     private static JSONArray chart(String id) throws Exception {
-        int top = 3, rest = Recs.MAX_CARDS - top;
-        JSONArray out = songs("/chart/" + id + "/tracks?limit=" + top);
-        JSONArray more = songs("/chart/" + id + "/tracks?limit=" + rest + "&index=" + (top + shuffle(id).nextInt(50 - top - rest + 1)));
-        for (int i = 0; i < more.length(); i++) out.put(more.get(i));
+        JSONArray top = songs("/chart/" + id + "/tracks?limit=50");
+        List<Integer> at = new ArrayList<>();
+        for (int i = 0; i < top.length(); i++) at.add(i);
+        java.util.Collections.shuffle(at, shuffle(id));
+        at = new ArrayList<>(at.subList(0, Math.min(Recs.MAX_CARDS, at.size())));
+        java.util.Collections.sort(at);
+        JSONArray out = new JSONArray();
+        for (int i : at) out.put(top.get(i));
         return out;
     }
 
@@ -296,14 +301,17 @@ final class Music {
         return a == null ? new JSONArray() : a;
     }
 
-    /** Hours since 1970: which songs show now. */
-    private static long hour() {
-        return System.currentTimeMillis() / 3_600_000L;
+    /** Which songs show now: the day in the TV's time zone, starting at 5 am. */
+    private static long day() {
+        long now = System.currentTimeMillis();
+        return (now + java.util.TimeZone.getDefault().getOffset(now) - NEW_DAY_HOUR * 3_600_000L) / 86_400_000L;
     }
 
-    /** Random, but the same all hour for this genre: the rows don't jump while you browse, and differ per genre. */
+    /** Random, but the same all day for this genre: the rows don't jump while you browse, and differ per genre. */
     private static java.util.Random shuffle(String genre) {
-        return new java.util.Random(hour() * 31 + genre.hashCode());
+        java.util.Random r = new java.util.Random(day() * 31 + genre.hashCode());
+        r.nextInt();    // close seeds (one day apart) start alike: the first number is skipped
+        return r;
     }
 
     /** Genre id → Deezer's name for it, in the TV's language. */
