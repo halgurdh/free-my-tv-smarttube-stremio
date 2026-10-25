@@ -1,7 +1,7 @@
 /*
  * What the home screen shows, kept in localStorage so it opens with numbers:
  *  - the picks: what's trending this week and recent releases, only from the streaming apps on this TV (TMDB, with
- *    the person's own free key from config.properties), three per hour;
+ *    the person's own free key from config.properties), 3 per hour (up to 6 in Home Settings);
  *  - weather, sunrise and sunset (Open-Meteo, every 30 min) and optional crypto prices (Binance, every 5 min).
  * Settings changed on the TV (Prefs) win over config.properties, as on Android. Built without a city (--generic), the
  * TV's time zone gives the city, and its country the currency and the region (zones.js).
@@ -51,6 +51,8 @@ var Prefs = (function () {
     forecast: function () { return pick('forecast', 'hours') === 'days' ? 'days' : 'hours'; },
     quotes: function () { return pick('quotes', CONFIG.showCrypto !== false); },
     coin: function (i) { var c = pick('coins', null); return c ? c[i] !== false : true; },
+    /** Picks per tab: 3 (as it was) up to 6. */
+    cards: function () { var n = pick('cards', 3); return n < 3 ? 3 : n > 6 ? 6 : n; },
     shelf: function () { return pick('shelf', null); },
     /** The shelf_apps of the build that last set the shelf, so a new one wins once over the TV's choice. */
     shelfConfig: function () { return pick('shelfConfig', ''); },
@@ -298,7 +300,7 @@ var Data = (function () {
     return (cut > 0 ? t.slice(0, cut) : t).replace(/^\s+|\s+$/g, '');
   }
 
-  /** This hour's 3 picks: movies ("movie"), shows ("tv") or both (null). */
+  /** This hour's picks (Prefs.cards()): movies ("movie"), shows ("tv") or both (null). */
   function now(kind) {
     var list = [];
     if (!KEY) return list;
@@ -307,9 +309,9 @@ var Data = (function () {
       if ((kind === null || kind === p.kind) && (!p.detailed || (p.app && appFor(p.app)))) list.push(p);
     }
     if (!list.length) return list;
-    var hour = Math.floor(Date.now() / 3600000), out = [], seen = {};
-    for (var j = 0; j < list.length && out.length < 3; j++) {
-      var q = list[(hour * 3 + j) % list.length], f = franchise(q.title);
+    var hour = Math.floor(Date.now() / 3600000), out = [], seen = {}, n = Prefs.cards();
+    for (var j = 0; j < list.length && out.length < n; j++) {
+      var q = list[(hour * n + j) % list.length], f = franchise(q.title);
       if (!seen[f]) { seen[f] = true; out.push(q); }
     }
     return out;
@@ -361,6 +363,7 @@ var Data = (function () {
       if (err) { done(err); return; }
       var best = bestBackdrop(o.images);
       if (best) p.backdrop = best;
+      if (o.poster_path) p.poster = o.poster_path;
       var parts = [];
       if (p.kind === 'tv') parts.push(tr('Series'));
       if (o.genres && o.genres.length) {
@@ -413,7 +416,7 @@ var Data = (function () {
   function addPick(list, o, kind) {
     if (!o.backdrop_path) return;
     if (CONFIG.hideAnimation && animated(o)) return;
-    list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, meta: '', app: null, detailed: false});
+    list.push({id: o.id, kind: kind, title: kind === 'movie' ? o.title : o.name, backdrop: o.backdrop_path, poster: o.poster_path || '', meta: '', app: null, detailed: false});
   }
 
   function keyOf(p) { return p.kind + ':' + p.id; }
