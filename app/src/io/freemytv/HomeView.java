@@ -3726,7 +3726,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         // A narrow card shows only its title: why it's there ("Recently opened", Trakt's "Up next: S2 E5") goes under it,
         // fading into the whole meta (which starts with it) as the card widens.
-        String why = p.recent ? Ui.tr("Recently opened") : p.tag;
+        String why = p.recent ? (p.label != null ? p.label : Ui.tr("Recently opened")) : p.tag;
         if (open < 0.98f && why != null) {
             fitPaint.set(lCardMeta);
             int a = lCardMeta.getAlpha();

@@ -53,7 +53,8 @@ final class Recs {
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
         String video;           // YouTube tab (kind "yt"): the video's id
         String thumb;           // YouTube and Music rows: the small image on the card (a video thumbnail, an album cover)
-        boolean recent;         // a copy of one opened from the picks (Prefs.recent), "Recently opened" first in the meta
+        boolean recent;         // a copy of one opened from the picks (Prefs.recent), `label` first in the meta
+        String label;           // Recently opened: "Recently opened · Netflix" (the app it opens), under a narrow card's title
                                 // (kind APP: an app opened from the home screen; title = its name, no image)
         boolean detailed;
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
@@ -278,11 +279,8 @@ final class Recs {
         if ("music".equals(p.kind) && kept.backdrop == null && p.thumb != null) kept.backdrop = p.thumb.replace("/250x250-", "/1000x1000-");
         // Its own meta, without "Recently opened" or a Trakt tag: those are put back as it shows.
         String meta = p.meta == null ? "" : p.meta;
-        if (p.recent) meta = meta.contains(" · ") ? meta.substring(meta.indexOf(" · ") + 3) : "";
+        if (p.recent && p.label != null && meta.startsWith(p.label)) meta = meta.substring(p.label.length()).replaceFirst("^ · ", "");
         if (p.tag != null && meta.startsWith(p.tag + " · ")) meta = meta.substring(p.tag.length() + 3);
-        // A song's card names its app too, as a title's and a video's do ("Artist · Spotify").
-        String app = "music".equals(p.kind) ? serviceName(p) : "";
-        if (app != null && !app.isEmpty() && !meta.endsWith(app)) meta = meta.isEmpty() ? app : meta + " · " + app;
         kept.meta = meta;
         String saved;
         synchronized (recent) {
@@ -314,7 +312,15 @@ final class Recs {
                 if ((kind != null && !kind.equals(p.kind)) || !have.computeIfAbsent(p.pkg, this::installed)) continue;
                 Pick shown = copy(p);
                 shown.recent = true;
-                shown.meta = p.meta == null || p.meta.isEmpty() ? tag : tag + " · " + p.meta;
+                // "Recently opened · Netflix": the app it opens, first (not again at the end); an app's card has its
+                // name as its title.
+                String app = APP.equals(p.kind) ? null : serviceName(p), meta = p.meta == null ? "" : p.meta;
+                if (app != null && !app.isEmpty()) {
+                    if (meta.equals(app)) meta = "";
+                    else if (meta.endsWith(" · " + app)) meta = meta.substring(0, meta.length() - app.length() - 3);
+                }
+                shown.label = app == null || app.isEmpty() ? tag : tag + " · " + app;
+                shown.meta = meta.isEmpty() ? shown.label : shown.label + " · " + meta;
                 out.add(shown);
             }
         }
