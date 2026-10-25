@@ -203,6 +203,13 @@ final class YouTube {
         return null;
     }
 
+    /** The shader of a thumbnail that thumb() returned. */
+    android.graphics.BitmapShader shader(String video) {
+        synchronized (thumbs) {
+            return shaders.get(video);
+        }
+    }
+
     /** A row of the YouTube tab: a category (or "YouTube" for the channels in config.properties) and its videos. */
     static final class Row {
         final String title;
@@ -291,9 +298,13 @@ final class YouTube {
     private final int maxThumbs;
     private final Map<String, android.graphics.Bitmap> thumbs = new java.util.LinkedHashMap<String, android.graphics.Bitmap>(64, 0.75f, true) {
         @Override protected boolean removeEldestEntry(Map.Entry<String, android.graphics.Bitmap> eldest) {
-            return size() > maxThumbs;
+            if (size() <= maxThumbs) return false;
+            shaders.remove(eldest.getKey());
+            return true;
         }
     };
+    // Each thumbnail's shader for HomeView.coverImage, made with it and dropped with it (nothing made while drawing).
+    private final Map<String, android.graphics.BitmapShader> shaders = new HashMap<>();
     private final Set<String> thumbPending = new HashSet<>();
     private final ExecutorService thumbIo = Executors.newFixedThreadPool(2);
     private final android.os.Handler main = new android.os.Handler(android.os.Looper.getMainLooper());
@@ -320,7 +331,11 @@ final class YouTube {
             }
             final android.graphics.Bitmap done = b;
             synchronized (thumbs) {
-                if (done != null) thumbs.put(video, done);
+                if (done != null) {
+                    shaders.put(video, new android.graphics.BitmapShader(done, android.graphics.Shader.TileMode.CLAMP,
+                            android.graphics.Shader.TileMode.CLAMP));
+                    thumbs.put(video, done);
+                }
             }
             // A failed one stays pending until a minute has passed: not fetched again on every frame.
             main.postDelayed(() -> { synchronized (thumbs) { thumbPending.remove(video); } }, done != null ? 0 : 60_000L);

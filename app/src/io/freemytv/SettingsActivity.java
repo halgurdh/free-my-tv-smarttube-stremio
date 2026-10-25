@@ -168,7 +168,6 @@ public class SettingsActivity extends Activity {
         // The YouTube tab's categories (YouTube.CATEGORIES keys) and whether the home screen opened this screen.
         private final List<String> ytPicked = new ArrayList<>();
         private boolean ytFromHome;
-        private static final int PICK_CITY = 0, PICK_LANGUAGE = -1;
         private final List<String[]> cities = new ArrayList<>();
         private String cityStatus = "";
         private final RectF tmp = new RectF(), rowRect = new RectF(), focusBox = new RectF();

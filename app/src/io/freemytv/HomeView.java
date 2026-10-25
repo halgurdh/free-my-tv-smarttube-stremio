@@ -3305,8 +3305,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 }
                 Recs.Pick p = row.picks.get(i);
                 Bitmap thumb = "yt".equals(p.kind) ? yt.thumb(p.video, thumbReady) : null;
-                if (thumb != null) {
-                    roundImage(c, thumb, cell, rr, true, 1);
+                BitmapShader thumbShader = thumb != null ? yt.shader(p.video) : null;
+                if (thumbShader != null) {
+                    coverImage(c, thumb, thumbShader, cell, rr, 1);
                 } else {
                     fill.setShader(null);
                     fill.setColor(tone(0xFFDADADF, 0xFF2C2C2E));
