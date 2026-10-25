@@ -14,6 +14,7 @@ import java.net.URL;
 import java.net.URLEncoder;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Locale;
 import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
@@ -256,18 +257,26 @@ final class Music {
         });
     }
 
-    /** The songs of Deezer's playlist for these words: one of Deezer's editors' among the first five, else the first. */
+    /**
+     * The songs of Deezer's playlist for these words: among the first five, one of Deezer's editors' named for them, else
+     * an editor's, else the first. ("lofi hip hop" finds the Moods editor's "chill lofi" before the Rap editor's
+     * "lofi hip-hop".)
+     */
     private static JSONArray playlist(String words) throws Exception {
         JSONArray found = new JSONObject(get("/search/playlist?limit=5&q=" + URLEncoder.encode(words, "UTF-8"))).optJSONArray("data");
         if (found == null || found.length() == 0) throw new IOException("no playlist for " + words);
-        JSONObject best = found.getJSONObject(0);
+        JSONObject best = found.getJSONObject(0), editor = null;
+        String want = letters(words);
         for (int i = 0; i < found.length(); i++) {
-            JSONObject user = found.getJSONObject(i).optJSONObject("user");
-            if (user != null && user.optString("name").contains("Deezer")) {
-                best = found.getJSONObject(i);
+            JSONObject p = found.getJSONObject(i), user = p.optJSONObject("user");
+            if (user == null || !user.optString("name").contains("Deezer")) continue;
+            if (letters(p.optString("title")).contains(want)) {
+                editor = p;
                 break;
             }
+            if (editor == null) editor = p;
         }
+        if (editor != null) best = editor;
         // Today's 9: a stretch of the playlist picked at random each day (only 9 songs are fetched).
         int size = Math.max(1, best.optInt("nb_tracks", Recs.MAX_CARDS));
         int start = shuffle(words).nextInt(size);
@@ -278,6 +287,11 @@ final class Music {
             for (int i = 0; i < more.length(); i++) out.put(more.get(i));
         }
         return out;
+    }
+
+    /** Only the letters and digits, lowercase: "lofi hip-hop" and "Lofi Hip Hop" are the same. */
+    private static String letters(String s) {
+        return s.toLowerCase(Locale.ROOT).replaceAll("[^a-z0-9]", "");
     }
 
     /**
