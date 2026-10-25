@@ -2425,6 +2425,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         }
         HomeApps.Item it;
         RectF r;
+        Recs.Pick pick = null;   // a title opened from the picks: Recs.opened keeps it (Recently opened)
         if (!sheetOpen && zone == WIDGETS) return;   // a widget is only read
         if (sheetOpen) {
             if (others.isEmpty()) return;
@@ -2435,6 +2436,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (p == null || p.pkg == null) return;
             it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
             r = heroButton;
+            pick = p;
         } else if (zone == Z_STATUS) {
             if (statusItems.isEmpty()) return;
             it = statusItems.get(statusIndex);
@@ -2468,6 +2470,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                 keepPlace = true;
             }
             YouTube.get(getContext()).opened(p);
+            pick = p;
         } else {
             if (shelf.isEmpty()) return;
             it = shelf.get(shelfIndex);
@@ -2492,6 +2495,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         boolean opened = HomeApps.open(activity, it, this, Math.round(r.left), Math.round(r.top),
                 Math.round(r.width()), Math.round(r.height()));
         if (!opened) showToast(Ui.trf("Couldn't open {app}.", "app", it.label));
+        else if (pick != null) recs.opened(pick);
     }
 
     // MARK: - Holding OK: All Apps puts the app on the shelf or takes it off; on the shelf, the app is lifted to move

@@ -139,6 +139,10 @@ final class Prefs {
 
     static void setCards(int n) { put("cards", n); }
 
+    /** Titles opened from the picks come first again, across apps (Recs.opened); off: none are kept. */
+    static boolean recent() { return sp().getBoolean("recent", false); }
+    static void setRecent(boolean on) { put("recent", on); }
+
     /** "auto" (dark from sunset to sunrise), "light" or "dark". */
     static String theme() {
         String v = sp().getString("theme", Config.THEME.trim());

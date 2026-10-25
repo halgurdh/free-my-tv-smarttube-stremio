@@ -51,6 +51,7 @@ final class Recs {
         String thumb;           // YouTube and Music rows: the small image on the card (a video thumbnail, an album cover)
         String tag;             // Trakt: "Up next: S2 E5", "On your watchlist"…, first in the meta; else null
         int mine;               // Trakt: PROGRESS, LIKED (watchlist, recommended) or 0 (TMDB's)
+        boolean recent;         // a copy of one opened from the picks (Prefs.recent), "Recently opened" first in the meta
         boolean detailed;
         java.io.File photo;     // one of your own photos (Photos): no title, no caption
     }
@@ -196,6 +197,8 @@ final class Recs {
             listLanguage = cache.getString("language", cache.getBoolean("english", false) ? "en" : "pt");
             keyStamp = cache.getLong("keyStamp", 0);
             traktActivity = cache.getString("traktActivity", "");
+            String opened = cache.getString("recent", null);
+            if (opened != null) recent.addAll(parse(new JSONArray(opened)));
         } catch (Exception ignored) {
         }
     }
@@ -206,6 +209,73 @@ final class Recs {
         android.app.ActivityManager.MemoryInfo mem = new android.app.ActivityManager.MemoryInfo();
         am.getMemoryInfo(mem);
         return am.isLowRamDevice() || mem.totalMem < 3L << 30;
+    }
+
+    // MARK: - Recently opened (Prefs.recent): what was opened from the picks, in any app, kept on the TV only
+
+    /** The most kept: more than a tab shows, so one whose app is gone leaves room. */
+    private static final int RECENT_MAX = 10;
+    private final List<Pick> recent = new ArrayList<>();     // newest first; guarded by itself
+
+    /** A pick was opened from a card: it comes first again (with Prefs.recent on; off, nothing is kept). */
+    void opened(Pick p) {
+        // Movies, shows and YouTube videos; songs and the YouTube tab's setup card aren't kept.
+        if (!Prefs.recent() || p == null || p.pkg == null || p.photo != null || "music".equals(p.kind) || "yt-setup".equals(p.kind)) return;
+        String key = key(p);
+        Pick kept = copy(p);
+        // Its own meta, without "Recently opened" or a Trakt tag: those are put back as it shows.
+        String meta = p.meta == null ? "" : p.meta;
+        if (p.recent) meta = meta.contains(" · ") ? meta.substring(meta.indexOf(" · ") + 3) : "";
+        if (p.tag != null && meta.startsWith(p.tag + " · ")) meta = meta.substring(p.tag.length() + 3);
+        kept.meta = meta;
+        String saved;
+        synchronized (recent) {
+            for (int i = recent.size() - 1; i >= 0; i--) if (key(recent.get(i)).equals(key)) recent.remove(i);
+            recent.add(0, kept);
+            while (recent.size() > RECENT_MAX) recent.remove(recent.size() - 1);
+            try {
+                saved = json(recent).toString();
+            } catch (org.json.JSONException e) {
+                return;
+            }
+        }
+        cache.edit().putString("recent", saved).apply();
+        notifyListeners();
+    }
+
+    /** Recently opened of this kind (null: both) whose app is still on the TV, as they show: tagged, newest first. */
+    private List<Pick> recent(String kind, Map<String, Boolean> have) {
+        List<Pick> out = new ArrayList<>();
+        if (!Prefs.recent()) return out;
+        String tag = Ui.tr("Recently opened");
+        synchronized (recent) {
+            for (Pick p : recent) {
+                if ((kind != null && !kind.equals(p.kind)) || !have.computeIfAbsent(p.pkg, this::installed)) continue;
+                Pick shown = copy(p);
+                shown.recent = true;
+                shown.meta = p.meta == null || p.meta.isEmpty() ? tag : tag + " · " + p.meta;
+                out.add(shown);
+            }
+        }
+        return out;
+    }
+
+    /** What a recently opened title keeps: enough to show its card and open it again. */
+    private static Pick copy(Pick p) {
+        Pick c = new Pick();
+        c.id = p.id;
+        c.kind = p.kind;
+        c.title = p.title;
+        c.backdrop = p.backdrop;
+        c.poster = p.poster;
+        c.link = p.link;
+        c.app = p.app;
+        c.pkg = p.pkg;
+        c.meta = p.meta;
+        c.video = p.video;
+        c.thumb = p.thumb;
+        c.detailed = true;
+        return c;
     }
 
     void addListener(Listener l) { if (!listeners.contains(l)) listeners.add(l); }
@@ -273,6 +343,8 @@ final class Recs {
         int cards = Prefs.cards();
         java.util.Set<String> seen = new java.util.HashSet<>();
         take(out, seen, progress, 0, Math.max(1, cards * 2 / 5));
+        // Then what was opened from here (Prefs.recent), up to half the tab: at least one, in any app.
+        take(out, seen, recent(kind, have), 0, Math.max(out.size() + 1, (cards + 1) / 2));
         take(out, seen, liked, hour * cards, Math.max(2, cards * 3 / 5));
         take(out, seen, list, hour * cards, cards);
         take(out, seen, progress, 0, cards);
@@ -1021,13 +1093,7 @@ final class Recs {
 
     private void save() {
         try {
-            JSONArray a = new JSONArray();
-            for (Pick p : picks) {
-                a.put(new JSONObject().put("id", p.id).put("kind", p.kind).put("title", p.title).put("backdrop", p.backdrop)
-                        .put("poster", p.poster == null ? "" : p.poster).put("link", p.link == null ? "" : p.link)
-                        .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
-                        .put("tag", p.tag == null ? "" : p.tag).put("mine", p.mine).put("detailed", p.detailed));
-            }
+            JSONArray a = json(picks);
             SharedPreferences.Editor e = cache.edit().putString("picks", a.toString()).putInt("period", period).putLong("listAt", listAt)
                     .putString("traktActivity", traktActivity)
                     .putString("language", listLanguage)
@@ -1039,6 +1105,18 @@ final class Recs {
             e.apply();
         } catch (Exception ignored) {
         }
+    }
+
+    private static JSONArray json(List<Pick> list) throws org.json.JSONException {
+        JSONArray a = new JSONArray();
+        for (Pick p : list) {
+            a.put(new JSONObject().put("id", p.id).put("kind", p.kind).put("title", p.title).put("backdrop", p.backdrop)
+                    .put("poster", p.poster == null ? "" : p.poster).put("link", p.link == null ? "" : p.link)
+                    .put("meta", p.meta).put("app", p.app == null ? "" : p.app).put("pkg", p.pkg == null ? "" : p.pkg)
+                    .put("tag", p.tag == null ? "" : p.tag).put("mine", p.mine).put("detailed", p.detailed)
+                    .put("video", p.video == null ? "" : p.video).put("thumb", p.thumb == null ? "" : p.thumb));
+        }
+        return a;
     }
 
     private static List<Pick> parse(JSONArray a) {
@@ -1058,6 +1136,8 @@ final class Recs {
             p.pkg = o.optString("pkg").isEmpty() ? null : o.optString("pkg");
             p.tag = o.optString("tag").isEmpty() ? null : o.optString("tag");
             p.mine = o.optInt("mine");
+            p.video = o.optString("video").isEmpty() ? null : o.optString("video");
+            p.thumb = o.optString("thumb").isEmpty() ? null : o.optString("thumb");
             p.detailed = o.optBoolean("detailed");
             out.add(p);
         }
