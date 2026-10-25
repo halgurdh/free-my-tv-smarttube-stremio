@@ -2565,7 +2565,10 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             }
             if (p == null || p.pkg == null) return;
             Music music = Music.get(getContext());
-            it = HomeApps.app(p.pkg, Recs.serviceName(p), music.playing(p) ? null : p.link);   // the same song: just its app
+            // The same song while it may still play, or a song or video on the Recently opened card: just its app, where it
+            // was left (the link would start it over). A movie's or show's link opens its page, where the app offers to resume.
+            boolean resume = music.playing(p) || (p.recent && ("music".equals(p.kind) || "yt".equals(p.kind)));
+            it = HomeApps.app(p.pkg, Recs.serviceName(p), resume ? null : p.link);
             music.opened(p);
             r = cardRects[cardIndex];
             if (rowsMode()) {
