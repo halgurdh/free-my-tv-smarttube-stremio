@@ -57,6 +57,8 @@ No tools to install besides adb. The APK on the [latest release](https://github.
 
 If you built Free My TV yourself before, switch back to *Original* and uninstall it first: your build and the release are signed with different keys. For the picks, build it yourself with your TMDB key (below).
 
+**Updates come to the TV.** Once a week the APK from the release looks for a newer release and downloads it; the home screen then says so once, and *Home Settings* → *Updates* installs it through Android's installer, which asks first (and, the first time, asks to allow Free My TV to install apps). *Updates* also checks right away. The download must match the SHA-256 GitHub lists and be signed with the same key. A build you made yourself only says when a new version is out: build it again to update.
+
 ### The manual way
 
 1. **On the TV**, do step 1 above.
@@ -286,7 +288,7 @@ reference (fix them by hand); the others were machine-made, and corrections from
 
 ## Privacy
 
-No accounts, no analytics, no tracking. The app talks to TMDB, Open-Meteo (with the coordinates you set, or your time zone's main city), and Binance only when `show_crypto=true`, Watchmode only when you set a `watchmode_key`, Bing only when you pick the *Photo of the day* theme (for that photo), YouTube (youtube.com for the channels' RSS feeds, i.ytimg.com for the thumbnails) only when YouTube or SmartTube is on the TV, Deezer (api.deezer.com for the charts, cdn-images.dzcdn.net for the covers) only when you pick Music genres in Free My TV's settings, and Trakt (api.trakt.tv) only when you set a `trakt_client_id` and sign in on the TV. The *Now Playing widget* reads what apps are playing (title, artist, the app) through a notification listener, the only way Android shares it: Free My TV allows the listener only while the widget is on, never reads a notification with it, and asks Android to unbind it as soon as it connects, so it stays unbound. What's playing never leaves the TV. Your settings stay on your computer and your TV.
+No accounts, no analytics, no tracking. The app talks to TMDB, Open-Meteo (with the coordinates you set, or your time zone's main city), and Binance only when `show_crypto=true`, Watchmode only when you set a `watchmode_key`, Bing only when you pick the *Photo of the day* theme (for that photo), YouTube (youtube.com for the channels' RSS feeds, i.ytimg.com for the thumbnails) only when YouTube or SmartTube is on the TV, Deezer (api.deezer.com for the charts, cdn-images.dzcdn.net for the covers) only when you pick Music genres in Free My TV's settings, and Trakt (api.trakt.tv) only when you set a `trakt_client_id` and sign in on the TV. On Google TV it asks GitHub (api.github.com) once a week, or when you press *Updates*, for the latest release, and downloads its APK from github.com when there's a newer one for it. The *Now Playing widget* reads what apps are playing (title, artist, the app) through a notification listener, the only way Android shares it: Free My TV allows the listener only while the widget is on, never reads a notification with it, and asks Android to unbind it as soon as it connects, so it stays unbound. What's playing never leaves the TV. Your settings stay on your computer and your TV.
 
 ## Credits
 
