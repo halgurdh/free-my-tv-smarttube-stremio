@@ -379,6 +379,11 @@ final class YouTube {
         p.title = v.title;
         p.backdrop = THUMBS + v.id + "/maxresdefault.jpg";
         p.link = "https://www.youtube.com/watch?v=" + v.id;
+        // YouTube plays it in the channel's uploads (UU…): what comes next is the same channel's, not YouTube's
+        // suggestions. SmartTube would only show that list, without playing the video.
+        if (app[1].equals("youtube") && v.channelId != null && CHANNEL_ID.matcher(v.channelId).matches()) {
+            p.link += "&list=UU" + v.channelId.substring(2);
+        }
         p.pkg = app[0];
         p.app = app[1];
         p.meta = v.channel + " · " + age(now - v.published) + " · " + Recs.serviceName(p);
