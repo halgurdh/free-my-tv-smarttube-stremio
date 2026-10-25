@@ -65,12 +65,12 @@ public class HomeActivity extends Activity {
         super.onPause();
     }
 
-    /** Home button pressed on the home screen: back to the entry state (focus on the first app, sheet closed). */
+    /** Home button pressed on the home screen: back to the entry state (first app or Recently opened focused, sheet closed). */
     @Override protected void onNewIntent(Intent intent) {
         super.onNewIntent(intent);
         if (home == null) return;
         if (intent.getBooleanExtra(EXTRA_ALL_APPS, false)) home.showAllApps();
-        else home.reset(true);
+        else home.home();
     }
 
     @Override protected void onDestroy() {

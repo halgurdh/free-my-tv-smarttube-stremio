@@ -776,11 +776,11 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] picksLabels() {
-            return new String[] {Ui.tr("Picks per tab")};
+            return new String[] {Ui.tr("Picks per tab"), Ui.tr("Recently opened")};
         }
 
         private String[] picksValues() {
-            return new String[] {String.valueOf(Prefs.cards())};
+            return new String[] {String.valueOf(Prefs.cards()), onOff(Prefs.recent())};
         }
 
         /** The Trakt row (the last one), only with a Trakt API app in config.properties; else -1. */
@@ -1071,6 +1071,8 @@ public class SettingsActivity extends Activity {
                 if (focus == 0) {
                     int n = Prefs.cards() / 3 - 1, span = Recs.MAX_CARDS / 3;   // 3, 6, 9
                     Prefs.setCards(3 * (1 + (n + dir + span) % span));
+                } else if (focus == 1) {
+                    Prefs.setRecent(!Prefs.recent());
                 }
                 return;
             }
