@@ -358,14 +358,15 @@ final class Recs {
             }
         }
         long hour = System.currentTimeMillis() / 3600_000L;
-        // Trakt first: what they're in the middle of (as Trakt orders it), up to 2 in 5 cards, then their watchlist and
+        // Trakt next: what they're in the middle of (as Trakt orders it), up to 2 in 5 cards, then their watchlist and
         // Trakt's recommendations, up to 3 in 5 with those; then TMDB's. A new set each hour; Trakt's fill the rest when
         // TMDB's run short. Never two from the same franchise ("Law & Order" and "Law & Order: Special…").
         int cards = Prefs.cards();
         java.util.Set<String> seen = new java.util.HashSet<>();
-        take(out, seen, progress, 0, Math.max(1, cards * 2 / 5));
-        // Then what was opened from here (Prefs.recent), up to half the tab: at least one, in any app.
-        take(out, seen, recent(kind, have), 0, Math.max(out.size() + 1, (cards + 1) / 2));
+        int few = Math.max(1, cards * 2 / 5);
+        // What was opened last from here comes first (Prefs.recent; titles or apps), up to 2 in 5 cards; then Trakt's.
+        take(out, seen, recent(kind, have), 0, few);
+        take(out, seen, progress, 0, out.size() + few);
         take(out, seen, liked, hour * cards, Math.max(2, cards * 3 / 5));
         take(out, seen, list, hour * cards, cards);
         take(out, seen, progress, 0, cards);
