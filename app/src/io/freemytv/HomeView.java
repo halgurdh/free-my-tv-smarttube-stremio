@@ -3370,12 +3370,17 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /**
      * The rows, below the tabs and above the shelf: each category's name, then its videos (YouTube's thumbnails, gray
-     * until they arrive). The focused card grows, rises and gets the shadow and a light rim; the others have none
-     * (there are many of them on screen).
+     * until they arrive). The focused card grows, rises and gets the shadow, a light rim and a ring just outside it;
+     * the others have none (there are many of them on screen), only a light shade while the rows have the focus.
      */
     private void drawRows(Canvas c) {
         float top = (YT_TOP - 2) * k, bottom = (L_PLATTER_TOP - 4) * k;    // rows scrolled up leave no sliver
         YouTube yt = YouTube.get(getContext());
+        // How much the rows have the focus: the springs add up to about 1 while it moves from card to card (as on the
+        // shelf), so the others' shade doesn't flicker and fades as the focus leaves the rows.
+        float on = 0;
+        for (Spring s : cardFocus) on += Math.max(0, s.value);
+        float rowsOn = Math.min(1, on);
         c.save();
         c.clipRect(0, top, w, bottom);
         for (int r = 0; r < Math.min(YT_ROWS, ytRows.size()); r++) {
@@ -3419,11 +3424,23 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                         Symbols.draw(getContext(), c, "settings", cell.centerX(), cell.centerY(), 64 * k * s, tone(L_DIM, 0xB3FFFFFF));
                     }
                 }
+                float shade = rowsOn * (1 - f);
+                if (shade > 0.01f) {
+                    fill.setShader(null);
+                    fill.setColor(Ui.alpha(0xFF000000, tone(0.18f, 0.3f) * shade));
+                    c.drawRoundRect(cell, rr, rr, fill);
+                }
                 if (f > 0.01f) {
                     rim.setShader(null);
                     rim.setColor(Ui.alpha(0xFFFFFFFF, 0.9f * f));
                     rim.setStrokeWidth(3 * k);
                     c.drawRoundRect(cell, rr, rr, rim);
+                    // A ring just outside, past a small gap: it shows on a pale thumbnail too, and by day it's dark
+                    // (white wouldn't show on the light background), like the shelf's.
+                    float out = 6 * k;
+                    tmp.set(cell.left - out, cell.top - out, cell.right + out, cell.bottom + out);
+                    rim.setColor(Ui.alpha(tone(0xFF3A3A3C, 0xFFFFFFFF), tone(0.55f, 0.75f) * f));
+                    c.drawRoundRect(tmp, rr + out, rr + out, rim);
                     rim.setStrokeWidth(2.5f * k);
                 }
                 if (titles != null && i < titles.length) {
