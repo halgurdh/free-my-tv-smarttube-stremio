@@ -81,6 +81,7 @@ final class Config {
     static final boolean SHOW_CRYPTO = $CRYPTO;
     static final boolean HIDE_ANIMATION = $ANIMATION;
     static final boolean SCREENSAVER = $SAVER;   // false: the TV keeps its own
+    static final String YOUTUBE_CHANNELS = "$(prop youtube_channels '')";
 }
 EOF
 

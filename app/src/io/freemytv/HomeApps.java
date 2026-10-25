@@ -92,6 +92,10 @@ final class HomeApps {
         {"netflix", "Netflix", "com.netflix.ninja", "E50914", "", "1"},
         {"youtube", "YouTube", "com.google.android.youtube.tv", "FF0033", "play", "1"},
         {"youtube", "YouTube", "com.amazon.firetv.youtube", "FF0033", "play", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.stable", "E62117", "", "1"},
+        {"smarttube", "SmartTube", "org.smarttube.beta", "E62117", "", "1"},
+        {"smarttube", "SmartTube", "com.teamsmart.videomanager.tv", "E62117", "", "1"},     // its older package names
+        {"smarttube", "SmartTube", "com.liskovsoft.smarttubetv.beta", "E62117", "", "1"},
         {"prime", "Prime Video", "com.amazon.amazonvideo.livingroom", "1A98FF", "tint", "0.96"},
         {"prime", "Prime Video", "com.amazon.firebat", "1A98FF", "tint", "0.96"},
         {"prime", "Prime Video", "com.amazon.avod", "1A98FF", "tint", "0.96"},
