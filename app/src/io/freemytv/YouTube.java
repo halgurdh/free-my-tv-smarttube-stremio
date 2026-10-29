@@ -28,7 +28,7 @@ import java.util.regex.Pattern;
 
 /**
  * The YouTube tab: the newest videos of the channels in config.properties "youtube_channels" (channel ids), or else of
- * the categories picked on the TV (Settings > YouTube; the tab's first card asks, the first time), from YouTube's public
+ * the categories picked on the TV (Home Settings > Picks > YouTube tab; none picked, no tab), from YouTube's public
  * RSS feeds only (no key, no account, no pages read). The channels opened most from here come first and a video opened
  * here doesn't come back. They open in the YouTube app on the shelf: YouTube or SmartTube.
  */
@@ -102,8 +102,6 @@ final class YouTube {
             + "искусственн\\w* интеллект\\w*|ИИ|нейросет\\w*)\\b");
     /** Where each category's channels start in its row (after the key). */
     private static final int FIRST_CHANNEL = 1;
-    /** None picked yet (or none at all): a mix of a few categories. */
-    private static final String[] MIX = {"tech", "science", "cars", "sport", "food"};
     private static final long EVERY = 3600_000L, MAX_AGE = 30L * 24 * 3600_000L;
     private static final Pattern CHANNEL_ID = Pattern.compile("^UC[A-Za-z0-9_-]{22}$");
     /** Thumbnails come only from YouTube's image server, for an id that is a video id. */
@@ -172,12 +170,17 @@ final class YouTube {
         return !Config.YOUTUBE_CHANNELS.trim().isEmpty();
     }
 
-    /** The tab's first card asks for categories until they are picked once (an empty pick counts: the mix). */
-    static boolean needsSetup() {
-        return !configured() && Prefs.youtubeCategories() == null;
+    /** A channel to show: a valid id in config.properties, or a category picked on the TV. Without one, no tab. */
+    private static boolean hasChannels() {
+        if (!configured()) {
+            List<String> picked = Prefs.youtubeCategories();
+            return picked != null && !picked.isEmpty();
+        }
+        for (String s : Config.YOUTUBE_CHANNELS.split("[,\\s]+")) if (CHANNEL_ID.matcher(s.trim()).matches()) return true;
+        return false;
     }
 
-    /** The channels to show: from config.properties, or from the picked categories (or the mix). */
+    /** The channels to show: from config.properties, or from the picked categories. */
     private static List<String> channels() {
         List<String> out = new ArrayList<>();
         if (configured()) {
@@ -188,7 +191,7 @@ final class YouTube {
             return out;
         }
         List<String> picked = Prefs.youtubeCategories();
-        if (picked == null || picked.isEmpty()) picked = java.util.Arrays.asList(MIX);
+        if (picked == null) return out;
         for (String[] c : CATEGORIES) {
             if (!picked.contains(c[0])) continue;
             for (int i = FIRST_CHANNEL; i < c.length; i++) if (!out.contains(c[i])) out.add(c[i]);
@@ -196,9 +199,12 @@ final class YouTube {
         return out;
     }
 
-    /** Turned on (Home Settings > Picks) and YouTube or SmartTube is on the TV: the home screen shows the YouTube tab. */
+    /**
+     * Turned on (Home Settings > Picks), a channel to show and YouTube or SmartTube on the TV: the home screen shows the
+     * YouTube tab.
+     */
     boolean on() {
-        return Prefs.youtubeOn() && app() != null;
+        return Prefs.youtubeOn() && hasChannels() && app() != null;
     }
 
     /** The app the videos open in: the first YouTube app on the shelf, else the first one installed (YouTube first). */
@@ -226,7 +232,7 @@ final class YouTube {
     }
 
     /**
-     * The tab's rows: one per picked category (or the mix), each with its best-scored videos (newest first, the channels
+     * The tab's rows: one per picked category, each with its best-scored videos (newest first, the channels
      * opened most moved up), one per channel while there are other channels to pick from. A row short of recent videos
      * (channels that post monthly) fills up with older ones from the feeds, newest first, so a video opened here makes
      * room for another. Rows with no videos yet are left out; the first time, the first row starts with the "choose your
@@ -252,16 +258,9 @@ final class YouTube {
             fill(out, "YouTube", channels(), fresh, older, app, now);
         } else {
             List<String> picked = Prefs.youtubeCategories();
-            if (picked == null || picked.isEmpty()) picked = java.util.Arrays.asList(MIX);
             for (String[] c : CATEGORIES) {
-                if (picked.contains(c[0])) fill(out, name(c), java.util.Arrays.asList(c).subList(FIRST_CHANNEL, c.length), fresh, older, app, now);
+                if (picked != null && picked.contains(c[0])) fill(out, name(c), java.util.Arrays.asList(c).subList(FIRST_CHANNEL, c.length), fresh, older, app, now);
             }
-        }
-        if (needsSetup()) {
-            if (out.isEmpty()) out.add(new Row("YouTube"));
-            List<Recs.Pick> first = out.get(0).picks;
-            first.add(0, setupCard());
-            while (first.size() > Recs.MAX_CARDS) first.remove(first.size() - 1);
         }
         return out;
     }
@@ -347,17 +346,6 @@ final class YouTube {
             if (done != null) main.post(ready);
         });
         return null;
-    }
-
-    /** The first time: a card that opens Settings > YouTube (HomeView opens it, kind "yt-setup"). */
-    private static Recs.Pick setupCard() {
-        Recs.Pick p = new Recs.Pick();
-        p.kind = "yt-setup";
-        p.video = "setup";
-        p.title = Ui.tr("Choose your YouTube categories");
-        p.meta = Ui.tr("OK to choose · only this once");
-        p.detailed = true;
-        return p;
     }
 
     private static boolean contains(List<Recs.Pick> picks, String id) {

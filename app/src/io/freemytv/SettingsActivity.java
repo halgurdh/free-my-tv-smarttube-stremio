@@ -84,11 +84,6 @@ public class SettingsActivity extends Activity {
         if (view == null) return;
         view.resume();
         // From ADB: am start -n io.freemytv/.SettingsActivity --ez screensaver true (straight to the preview).
-        // From the home screen's YouTube tab (its first card): straight to the categories.
-        if (getIntent().getBooleanExtra("youtube", false)) {
-            getIntent().removeExtra("youtube");
-            view.openYouTube(true);
-        }
         if (preview == null && getIntent().getBooleanExtra("screensaver", false)) {
             getIntent().removeExtra("screensaver");
             view.pause();
@@ -188,9 +183,8 @@ public class SettingsActivity extends Activity {
          */
         private final List<String[]> choices = new ArrayList<>();
         private String choiceNow = "";
-        // The YouTube tab's categories (YouTube.CATEGORIES keys) and whether the home screen opened this screen.
+        // The YouTube tab's categories (YouTube.CATEGORIES keys).
         private final List<String> ytPicked = new ArrayList<>();
-        private boolean ytFromHome;
         private final List<String[]> cities = new ArrayList<>();
         private String cityStatus = "";
         private JSONObject updates = new JSONObject();   // Updates' file (the main process writes it), read in poll
@@ -966,10 +960,6 @@ public class SettingsActivity extends Activity {
                                 focus = WATCH_ROW;   // on the list's first screen
                                 pickScroll = 0;
                                 screen = HOME_SETTINGS;
-                            } else if (screen == YT_EDIT && ytFromHome) {
-                                backDown = false;
-                                activity.finish();     // opened from the home screen's YouTube tab: back there
-                                return true;
                             } else if (screen == YT_EDIT) {
                                 countServicesOff();
                                 pickScroll = 0;
@@ -2153,15 +2143,13 @@ public class SettingsActivity extends Activity {
 
         // MARK: - YouTube categories
 
-        /** Settings > YouTube, or straight from the YouTube tab's first card (fromHome: Back goes back there). */
-        void openYouTube(boolean fromHome) {
+        /** Home Settings > Picks > YouTube tab: the switch, the categories (none picked: no tab) and Hide AI videos. */
+        private void openYouTube() {
             List<String> saved = Prefs.youtubeCategories();
             ytPicked.clear();
             if (saved != null) ytPicked.addAll(saved);
-            else Prefs.setYoutubeCategories(ytPicked);     // seen once: the tab stops asking (none picked = the mix)
-            ytFromHome = fromHome;
             pickScroll = 0;
-            focus = fromHome ? 1 : 0;     // from the tab, it's on: the first category
+            focus = 0;
             screen = YT_EDIT;
             invalidate();
             spoken.focusMoved();
@@ -2217,7 +2205,7 @@ public class SettingsActivity extends Activity {
             }
             Paint hint = Ui.text(Ui.regular, 23 * k, 0x8CFFFFFF);
             float hy = (LIST_TOP + 20 + rows * (LIST_ROW_H + LIST_ROW_GAP) + 36) * k;
-            c.drawText(Ui.tr("OK picks or removes. None: a mix. Back saves."), LIST_X * k + 30 * k, hy, hint);
+            c.drawText(Ui.tr("OK picks or removes. None: no YouTube tab. Back saves."), LIST_X * k + 30 * k, hy, hint);
         }
 
         private void openPicker(int which) {
@@ -2473,7 +2461,7 @@ public class SettingsActivity extends Activity {
             } else if (screen == POWER) {
                 activatePower();
             } else if (screen == PICKS && focus == youtubeRow()) {
-                openYouTube(false);
+                openYouTube();
             } else if (screen == PICKS && focus == traktRow()) {
                 traktOk();
                 invalidate();

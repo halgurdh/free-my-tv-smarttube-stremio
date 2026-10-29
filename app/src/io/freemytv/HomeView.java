@@ -3268,11 +3268,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             return;
         } else if (zone == Z_CARDS) {
             Recs.Pick p = cardIndex < cards.size() ? cards.get(cardIndex) : null;
-            if (p != null && "yt-setup".equals(p.kind)) {
-                click.open();
-                activity.startActivity(new android.content.Intent(activity, SettingsActivity.class).putExtra("youtube", true));
-                return;
-            }
             if (p == null || p.pkg == null) return;
             it = HomeApps.app(p.pkg, Recs.serviceName(p), p.link);
             r = cardRects[cardIndex];
@@ -4818,9 +4813,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                     fill.setShader(null);
                     fill.setColor(tone(0xFFDADADF, 0xFF2C2C2E));
                     c.drawRoundRect(cell, rr, rr, fill);
-                    if ("yt-setup".equals(p.kind)) {
-                        Symbols.draw(getContext(), c, "settings", cell.centerX(), cell.centerY(), 64 * k * s, tone(L_DIM, 0xB3FFFFFF));
-                    }
                 }
                 if (f > 0.01f) {
                     rim.setShader(null);
@@ -4908,9 +4900,6 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             fill.setShader(null);
             fill.setColor(tone(0xFFDADADF, 0xFF2C2C2E));
             c.drawRoundRect(cell, r, r, fill);
-            if (p != null && "yt-setup".equals(p.kind)) {   // the YouTube tab's "choose your categories" card
-                Symbols.draw(getContext(), c, "settings", cell.centerX(), cell.centerY(), 96 * k * s, tone(L_DIM, 0xB3FFFFFF));
-            }
         }
         if (f > 0.01f) {
             if (lightSheens.length != cardRects.length) {
