@@ -19,17 +19,19 @@ import java.util.concurrent.ExecutorService;
 import java.util.concurrent.Executors;
 
 /**
- * The Music tab (optional: it shows once genres are picked in Settings > Music, up to MAX_GENRES): a row per genre with
+ * The Music tab (optional: it shows once genres are picked in Home Settings > Picks > Music tab, up to MAX_GENRES): a row per genre with
  * this week's top songs in the TV's country, from Deezer's public charts (its album charts lag years behind), or for a
  * style Deezer has no chart for (lofi, K-pop, house…) the songs of Deezer's own playlist for it. No key, no account. The chart genres' names come from Deezer
- * in the TV's language. They open in the music app on the shelf (Spotify, YouTube Music, Deezer, Tidal, Apple Music):
+ * in the TV's language. They open in the music app on the shelf (Spotify, Deezer, Tidal, Apple Music):
  * Spotify plays the best match, the others open on their home.
  */
 final class Music {
-    /** The music apps an album can open in, in this order when none is on the shelf. */
+    /**
+     * The music apps an album can open in, in this order when none is on the shelf. Not YouTube Music: Free My TV mode
+     * turns it off (HomeMode.DEBLOAT).
+     */
     private static final String[][] APPS = {
         {"com.spotify.tv.android", "spotify"},
-        {"com.google.android.youtube.tvmusic", "ytmusic"},
         {"deezer.android.tv", "deezer"},
         {"com.aspiro.tidal", "tidal"},
         {"com.apple.android.music", "applemusic"},
@@ -118,7 +120,7 @@ final class Music {
         }
     }
 
-    /** The genres in alphabetical order of their names in the TV's language (Settings > Music and the tab's rows). */
+    /** The genres in alphabetical order of their names in the TV's language (the Music tab's settings and its rows). */
     String[][] sorted() {
         String[][] out = GENRES.clone();
         java.text.Collator order = java.text.Collator.getInstance(Ui.locale());
@@ -242,7 +244,7 @@ final class Music {
         });
     }
 
-    /** Settings > Music: Deezer's genre names in the TV's language, fetched once when the screen opens. */
+    /** The Music tab's settings: Deezer's genre names in the TV's language, fetched once, after the first genre is picked. */
     void fetchNames(Runnable done) {
         if (names.length() > 0) return;
         io.execute(() -> {

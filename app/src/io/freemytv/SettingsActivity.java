@@ -976,6 +976,11 @@ public class SettingsActivity extends Activity {
                                 pickScroll = 0;
                                 focus = youtubeRow();
                                 screen = PICKS;
+                            } else if (screen == MUSIC_EDIT) {
+                                countServicesOff();
+                                pickScroll = 0;
+                                focus = musicRow();
+                                screen = PICKS;
                             } else {
                                 focus = screen == HOME_SETTINGS ? 2 : screen == SHELF_EDIT ? (editingTop ? 4 : 3)
                                         : screen == REMOTE_KEYS ? 5 : screen == POWER ? 6 : 0;
@@ -1057,20 +1062,25 @@ public class SettingsActivity extends Activity {
         }
 
         private String[] picksLabels() {
-            return Trakt.available() ? new String[] {Ui.tr("Picks per tab"), Ui.tr("Picks from"), "Trakt", Ui.tr("YouTube tab")}
-                    : new String[] {Ui.tr("Picks per tab"), Ui.tr("Picks from"), Ui.tr("YouTube tab")};
+            return Trakt.available() ? new String[] {Ui.tr("Picks per tab"), Ui.tr("Picks from"), "Trakt", Ui.tr("YouTube tab"), Ui.tr("Music tab")}
+                    : new String[] {Ui.tr("Picks per tab"), Ui.tr("Picks from"), Ui.tr("YouTube tab"), Ui.tr("Music tab")};
         }
 
         private String[] picksValues() {
             String from = someServicesOff ? Ui.tr("services|Some") : Ui.tr("services|All");
-            String yt = onOff(Prefs.youtubeOn());
-            return Trakt.available() ? new String[] {String.valueOf(Prefs.cards()), from, traktValue(), yt}
-                    : new String[] {String.valueOf(Prefs.cards()), from, yt};
+            String yt = onOff(Prefs.youtubeOn()), music = onOff(!Prefs.musicGenres().isEmpty());
+            return Trakt.available() ? new String[] {String.valueOf(Prefs.cards()), from, traktValue(), yt, music}
+                    : new String[] {String.valueOf(Prefs.cards()), from, yt, music};
         }
 
         /** The YouTube tab's row on the Picks screen, the last: ← → turn the tab on or off, OK opens its categories. */
         private static int youtubeRow() {
             return Trakt.available() ? 3 : 2;
+        }
+
+        /** The Music tab's row, after YouTube's: OK opens its genres (none picked: no tab). */
+        private static int musicRow() {
+            return youtubeRow() + 1;
         }
 
         /** The Trakt row on the Picks screen (the third), only with a Trakt API app in config.properties; else -1. */
@@ -2154,16 +2164,15 @@ public class SettingsActivity extends Activity {
 
         // MARK: - Music genres
 
-        /** Settings > Music: Deezer's genres (their names in the TV's language), up to Music.MAX_GENRES. */
+        /**
+         * Home Settings > Picks > Music tab: Deezer's genres, up to Music.MAX_GENRES. Their names in the TV's language
+         * come from Deezer only once a genre is picked: until then nothing is asked of Deezer, and the names are ours.
+         */
         private void openMusic() {
             musicPicked.clear();
             musicPicked.addAll(Prefs.musicGenres());
-            Music music = Music.get(getContext());
-            musicList = music.sorted();
-            music.fetchNames(() -> handler.post(() -> {     // Deezer's names arrived: sorted again by them
-                musicList = music.sorted();
-                invalidate();
-            }));
+            musicList = Music.get(getContext()).sorted();
+            if (!musicPicked.isEmpty()) musicNames();
             pickScroll = 0;
             focus = 0;
             screen = MUSIC_EDIT;
@@ -2176,6 +2185,23 @@ public class SettingsActivity extends Activity {
             String id = musicList[pickScroll + focus][0];
             if (!musicPicked.remove(id) && musicPicked.size() < Music.MAX_GENRES) musicPicked.add(id);
             Prefs.setMusicGenres(musicPicked);
+            if (!musicPicked.isEmpty()) musicNames();
+        }
+
+        /** Deezer's genre names (once; then kept): the list is sorted again by them, keeping the focused row. */
+        private void musicNames() {
+            Music music = Music.get(getContext());
+            music.fetchNames(() -> handler.post(() -> {
+                if (screen != MUSIC_EDIT) return;
+                String focused = musicList[pickScroll + focus][0];
+                musicList = music.sorted();
+                for (int i = 0; i < musicList.length; i++) {
+                    if (!musicList[i][0].equals(focused)) continue;
+                    pickScroll = Math.max(0, Math.min(i, musicList.length - PICK_VISIBLE));
+                    focus = i - pickScroll;
+                }
+                invalidate();
+            }));
         }
 
         private void drawMusic(Canvas c) {
@@ -2528,6 +2554,8 @@ public class SettingsActivity extends Activity {
                 activatePower();
             } else if (screen == PICKS && focus == youtubeRow()) {
                 openYouTube();
+            } else if (screen == PICKS && focus == musicRow()) {
+                openMusic();
             } else if (screen == PICKS && focus == traktRow()) {
                 traktOk();
                 invalidate();

@@ -164,7 +164,6 @@ final class Recs {
         SERVICE_NAME.put("smarttube", "SmartTube");
         SERVICE_NAME.put("youtube", "YouTube");
         SERVICE_NAME.put("spotify", "Spotify");
-        SERVICE_NAME.put("ytmusic", "YouTube Music");
         SERVICE_NAME.put("deezer", "Deezer");
         SERVICE_NAME.put("tidal", "TIDAL");
         SERVICE_NAME.put("applemusic", "Apple Music");
