@@ -623,6 +623,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             playing.start();   // the listener allowed after the screen showed (a no-op once watching)
             data.refreshIfStale();
             recs.refreshIfStale();
+            recs.refreshTabs();
             checkNotices();
             updatePalette();
             checkNight(true);
@@ -710,6 +711,9 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
     void resume() {
         if (running) return;
         running = true;
+        // Home comes before this (onNewIntent, then onResume): still kept here, the video was left with Back, and the
+        // next Home resets as always.
+        keepPlace = false;
         checkNight(false);
         boolean h24 = Ui.h24();
         if (h24 != clock24) {   // 12/24 hours changed (the TV's or the Clock row's): the clock and the drawer's times again
@@ -728,6 +732,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         recs.addListener(this);
         data.refreshIfStale();
         recs.refreshIfStale();
+        recs.refreshTabs();
         Photos.importInbox(getContext(), ownReady);   // photos a computer just sent
         ImmichPhotos.syncIfDue(getContext(), ownReady);   // or a new choice from the Immich server, every 6 hours
         if (tvInputs != null) tvInputs.registerCallback(inputCallback, handler);
@@ -4728,13 +4733,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         return true;
     }
 
-    /** The focused title rests this long, scrolls at TITLE_SPEED to its end, rests, and starts again. */
+    /** The focused title rests this long, scrolls once at TITLE_SPEED to its end, rests, and goes back to its start. */
     private static final long TITLE_WAIT = 1500, TITLE_HOLD = 2000;
     private static final float TITLE_SPEED = 70;
 
     /**
      * The focused row card's title, when it's wider than the card: moves it along (titleShift) and says whether it's
-     * moving now. While it rests at either end, nothing is redrawn: titleWake brings the frames back when it moves on.
+     * moving now. While it rests, nothing is redrawn: titleWake brings the frames back when it moves on. Once round,
+     * then it stays at its start until the focus moves (nothing moves on a screen left alone).
      */
     private boolean tickTitle(long up) {
         int r = rowsMode() && zone == Z_CARDS ? ytRow : -1, col = r >= 0 ? ytCol[r] : -1;
@@ -4750,7 +4756,12 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         if (r < 0 || r >= ytFullW.size() || col >= ytFullW.get(r).length) return false;
         float over = ytFullW.get(r)[col] - YT_CARD_W * k;
         if (over <= 0) return false;
-        long travel = (long) (over / (TITLE_SPEED * k) * 1000), t = (up - titleSince) % (TITLE_WAIT + travel + TITLE_HOLD);
+        long travel = (long) (over / (TITLE_SPEED * k) * 1000), t = up - titleSince;
+        if (t >= TITLE_WAIT + travel + TITLE_HOLD) {
+            if (titleShift != -1) heroDirty = true;
+            titleShift = -1;
+            return false;
+        }
         if (t < TITLE_WAIT) {
             if (titleShift != -1) heroDirty = true;
             titleShift = -1;
@@ -4771,17 +4782,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
 
     /**
      * The rows, below the tabs and above the shelf: each category's name, then its videos (YouTube's thumbnails, gray
-     * until they arrive). The focused card grows, rises and gets the shadow, a light rim and a ring just outside it;
-     * the others have none (there are many of them on screen), only a light shade while the rows have the focus.
+     * until they arrive). The focused card only grows, rises and gets the shadow and a light rim, as the picks do.
      */
     private void drawRows(Canvas c) {
         float top = (YT_TOP - 2) * k, bottom = (L_PLATTER_TOP - 4) * k;    // rows scrolled up leave no sliver
         YouTube yt = YouTube.get(getContext());
-        // How much the rows have the focus: the springs add up to about 1 while it moves from card to card (as on the
-        // shelf), so the others' shade doesn't flicker and fades as the focus leaves the rows.
-        float on = 0;
-        for (Spring s : cardFocus) on += Math.max(0, s.value);
-        float rowsOn = Math.min(1, on);
         c.save();
         c.clipRect(0, top, w, bottom);
         for (int r = 0; r < Math.min(YT_ROWS, ytRows.size()); r++) {
@@ -4817,23 +4822,11 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
                         Symbols.draw(getContext(), c, "settings", cell.centerX(), cell.centerY(), 64 * k * s, tone(L_DIM, 0xB3FFFFFF));
                     }
                 }
-                float shade = rowsOn * (1 - f);
-                if (shade > 0.01f) {
-                    fill.setShader(null);
-                    fill.setColor(Ui.alpha(0xFF000000, tone(0.18f, 0.3f) * shade));
-                    c.drawRoundRect(cell, rr, rr, fill);
-                }
                 if (f > 0.01f) {
                     rim.setShader(null);
                     rim.setColor(Ui.alpha(0xFFFFFFFF, 0.9f * f));
                     rim.setStrokeWidth(3 * k);
                     c.drawRoundRect(cell, rr, rr, rim);
-                    // A ring just outside, past a small gap: it shows on a pale thumbnail too, and by day it's dark
-                    // (white wouldn't show on the light background), like the shelf's.
-                    float out = 6 * k;
-                    tmp.set(cell.left - out, cell.top - out, cell.right + out, cell.bottom + out);
-                    rim.setColor(Ui.alpha(tone(0xFF3A3A3C, 0xFFFFFFFF), tone(0.55f, 0.75f) * f));
-                    c.drawRoundRect(tmp, rr + out, rr + out, rim);
                     rim.setStrokeWidth(2.5f * k);
                 }
                 if (titles != null && i < titles.length) {

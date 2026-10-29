@@ -409,9 +409,13 @@ final class Recs {
         return new File(new File(context.getCacheDir(), "recs"), p.backdrop.replaceAll("[^A-Za-z0-9._-]", ""));
     }
 
+    /** The YouTube tab's feeds: only the home screen asks (never the screensaver, in whichever process it runs). */
+    void refreshTabs() {
+        YouTube.get(context).refreshIfStale(this::notifyListeners);
+    }
+
     /** With a key: fetches the list if stale or the time of day (morning/afternoon/night) changed; then the details. */
     void refreshIfStale() {
-        YouTube.get(context).refreshIfStale(this::notifyListeners);
         if (!hasKey(context) || fetching) return;
         long now = System.currentTimeMillis();
         long stamp = sourceStamp();   // a new key, country, animation choice or installed streaming-app set refetches
@@ -1277,9 +1281,10 @@ final class Recs {
             if (parts[i].lastModified() < stale) parts[i].delete();
         }
         File[] files = dir.listFiles((d, name) -> !name.endsWith(".part"));
-        if (files == null || files.length <= FILES + YouTube.BACKDROPS) return;
+        int keep = FILES + YouTube.BACKDROPS;
+        if (files == null || files.length <= keep) return;
         Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
-        for (int i = 0; i < files.length - FILES + YouTube.BACKDROPS; i++) {
+        for (int i = 0; i < files.length - keep; i++) {
             //noinspection ResultOfMethodCallIgnored
             files[i].delete();
         }

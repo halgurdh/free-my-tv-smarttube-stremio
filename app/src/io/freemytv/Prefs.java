@@ -342,6 +342,15 @@ final class Prefs {
 
     // MARK: - YouTube tab
 
+    /** The YouTube tab, off until turned on (Home Settings > Picks > YouTube tab). */
+    static boolean youtubeOn() {
+        return sp().getBoolean("youtube_on", false);
+    }
+
+    static void setYoutubeOn(boolean on) {
+        put("youtube_on", on);
+    }
+
     /** The YouTube tab's categories (YouTube.CATEGORIES keys); null until picked once (empty: none, the mix). */
     static List<String> youtubeCategories() {
         String v = sp().getString("youtube", null);

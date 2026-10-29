@@ -103,7 +103,7 @@ final class YouTube {
     /** Where each category's channels start in its row (after the key). */
     private static final int FIRST_CHANNEL = 1;
     /** None picked yet (or none at all): a mix of a few categories. */
-    private static final String[] MIX = {"tech", "science", "cars", "sport", "news"};
+    private static final String[] MIX = {"tech", "science", "cars", "sport", "food"};
     private static final long EVERY = 3600_000L, MAX_AGE = 30L * 24 * 3600_000L;
     private static final Pattern CHANNEL_ID = Pattern.compile("^UC[A-Za-z0-9_-]{22}$");
     /** Thumbnails come only from YouTube's image server, for an id that is a video id. */
@@ -196,9 +196,9 @@ final class YouTube {
         return out;
     }
 
-    /** YouTube or SmartTube is on the TV: the home screen shows the YouTube tab. */
+    /** Turned on (Home Settings > Picks) and YouTube or SmartTube is on the TV: the home screen shows the YouTube tab. */
     boolean on() {
-        return app() != null;
+        return Prefs.youtubeOn() && app() != null;
     }
 
     /** The app the videos open in: the first YouTube app on the shelf, else the first one installed (YouTube first). */
