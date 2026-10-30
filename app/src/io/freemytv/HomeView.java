@@ -2773,14 +2773,14 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             hit = tileAt(x, y);
         }
         if (!entered(z, hit)) return;
-        int now = zone == Z_TOP ? topIndex : zone == Z_CARDS ? cardIndex : zone == Z_WATCH ? watchIndex : shelfIndex;
+        int now = zone == Z_TOP ? topIndex : zone == Z_CARDS ? focusedCard() : zone == Z_WATCH ? watchIndex : shelfIndex;
         if (zone == z && now == hit) return;
         zone = z;
         if (z == Z_TOP) {
             topIndex = hit;
-            if (hit < 3) selectTab(hit);   // as with the arrows (and on LG): focusing a tab selects it
+            if (hit < B0) selectTab(hit);   // as with the arrows (and on LG): focusing a tab selects it
         } else if (z == Z_CARDS) {
-            cardIndex = hit;
+            focusCard(hit);
         } else if (z == Z_WATCH) {
             watchIndex = hit;
         } else {
@@ -2806,6 +2806,13 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
             if (next != drawerIndex) {
                 zone = Z_DRAWER;
                 drawerIndex = next;
+                retarget(false);
+            }
+        } else if (zone == Z_CARDS && rowsMode()) {   // a row at a time, as in All Apps: the page scrolls
+            int next = Math.max(0, Math.min(Math.min(YT_ROWS, ytRows.size()) - 1, ytRow + dir));
+            if (next != ytRow) {
+                ytRow = next;
+                syncRow(false);
                 retarget(false);
             }
         } else if (zone == Z_CARDS && !cards.isEmpty()) {
@@ -2877,7 +2884,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
         hit = cardAt(x, y, false);
         if (hit >= 0) {
             zone = Z_CARDS;
-            cardIndex = hit;
+            focusCard(hit);
             retarget(false);
             activate();
             return;
@@ -2914,7 +2921,7 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      */
     private int topAt(float x, float y) {
         int hit = hit(topRects, x, y);
-        return hit >= 3 + lightButtons.size() || hit >= 0 && hit < 3 && !picksMode() ? -1 : hit;
+        return hit >= B0 + lightButtons.size() || hit >= 0 && hit < B0 && (!picksMode() || hit >= tabKinds.length) ? -1 : hit;
     }
 
     /**
@@ -2924,9 +2931,46 @@ final class HomeView extends ViewGroup implements Choreographer.FrameCallback, H
      * pointer moves. A click takes any card.
      */
     private int cardAt(float x, float y, boolean still) {
+        if (rowsMode()) return rowCardAt(x, y, still);
         int hit = hit(cardRects, x, y);
         if (hit < 0 || hit >= cards.size()) return -1;
         return still && Math.max(0, hit - 2) != cardScroll.target ? -1 : hit;
+    }
+
+    /**
+     * The YouTube tab's card under a point, as row * Recs.MAX_CARDS + card, or -1. Hovering (`still`) only takes one
+     * that leaves the page and its row where they are (syncRow's targets), for the same reason as cardAt.
+     */
+    private int rowCardAt(float x, float y, boolean still) {
+        if (y < (YT_TOP - 2) * k || y > (L_PLATTER_TOP - 4) * k) return -1;   // drawRows' clip
+        int n = Math.min(YT_ROWS, ytRows.size());
+        for (int r = 0; r < n; r++) {
+            int size = ytRows.get(r).picks.size();
+            for (int i = 0; i < size && i < Recs.MAX_CARDS; i++) {
+                ytCardRect(r, i, hitBox);
+                if (!hitBox.contains(x, y)) continue;
+                if (still && (Math.max(0, Math.min(r, n - 2)) != ytScroll.target
+                        || Math.max(0, Math.min(i - 2, size - YT_VISIBLE)) != ytSlide[r].target)) return -1;
+                return r * Recs.MAX_CARDS + i;
+            }
+        }
+        return -1;
+    }
+
+    /** Focuses the card cardAt found: on the YouTube tab, that row and its place in it. */
+    private void focusCard(int hit) {
+        if (!rowsMode()) {
+            cardIndex = hit;
+            return;
+        }
+        ytRow = hit / Recs.MAX_CARDS;
+        ytCol[ytRow] = hit % Recs.MAX_CARDS;
+        syncRow(false);
+    }
+
+    /** The focused card, numbered as cardAt numbers it. */
+    private int focusedCard() {
+        return rowsMode() ? ytRow * Recs.MAX_CARDS + ytCol[ytRow] : cardIndex;
     }
 
     /** The Continue Watching card under a point, if any (only the ones on screen; `still` as in cardAt). */

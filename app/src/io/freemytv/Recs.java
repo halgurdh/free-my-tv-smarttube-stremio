@@ -1158,6 +1158,7 @@ final class Recs {
             HttpURLConnection c = p.id < 0
                     ? plexOpen("/photo/:/transcode?width=1920&height=1080&minSize=1&url=" + URLEncoder.encode(p.backdrop, "UTF-8"))
                     : (HttpURLConnection) new URL(video ? p.backdrop : IMAGES + p.backdrop).openConnection();
+            if (video) c.setInstanceFollowRedirects(false);   // i.ytimg.com only
             // A video's full-size thumbnail is missing when it was uploaded below 1080p: then the 720p one, then the small one.
             for (String smaller : video ? new String[] {"hq720.jpg", "hqdefault.jpg"} : new String[0]) {
                 c.setConnectTimeout(8000);
@@ -1165,6 +1166,13 @@ final class Recs {
                 if (c.getResponseCode() != 404) break;
                 c.disconnect();
                 c = (HttpURLConnection) new URL(p.backdrop.replace("maxresdefault.jpg", smaller)).openConnection();
+                c.setInstanceFollowRedirects(false);
+            }
+            // Not followed, a redirect's own page would be saved as the image.
+            if (video && c.getResponseCode() != 200) {
+                int code = c.getResponseCode();
+                c.disconnect();
+                throw new IOException("HTTP " + code);
             }
             fetchFile(f, c);
         }
@@ -1281,7 +1289,7 @@ final class Recs {
             if (parts[i].lastModified() < stale) parts[i].delete();
         }
         File[] files = dir.listFiles((d, name) -> !name.endsWith(".part"));
-        int keep = FILES + YouTube.BACKDROPS;
+        int keep = FILES + (Prefs.youtubeOn() ? YouTube.BACKDROPS : 0);   // the tab's backgrounds only while it's on
         if (files == null || files.length <= keep) return;
         Arrays.sort(files, (a, b) -> Long.compare(a.lastModified(), b.lastModified()));
         for (int i = 0; i < files.length - keep; i++) {

@@ -499,6 +499,7 @@ final class YouTube {
         h.setConnectTimeout(8000);
         h.setReadTimeout(10000);
         h.setRequestProperty("User-Agent", "Mozilla/5.0");
+        h.setInstanceFollowRedirects(false);   // youtube.com and i.ytimg.com only, the hosts the README lists
         return h;
     }
 
